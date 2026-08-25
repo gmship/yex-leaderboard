@@ -1,0 +1,11 @@
+services:
+  leaderboard:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/leaderboard.db
+    ports:
+      - "5000:8000"
+    volumes:
+      - ./data:/data
