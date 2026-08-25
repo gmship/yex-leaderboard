@@ -92,10 +92,9 @@ const fetchSiteDetails = async () => {
       return;
     }
     form.elements.name.value = result.name || '';
-    form.elements.tagline.value = result.description || '';
     faviconInput.value = result.favicon_url || '';
-    setFetchStatus('Details added. Review or edit them below.', 'success');
-    (result.name ? form.elements.name : form.elements.tagline).focus();
+    setFetchStatus('Name added. Review or edit it below.', 'success');
+    form.elements.name.focus();
   } catch (error) {
     setFetchStatus(error.message, 'error');
   } finally {

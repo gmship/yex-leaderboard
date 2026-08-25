@@ -523,12 +523,17 @@ a { color: inherit; text-decoration: none; }
 .admin-panel-heading .eyebrow { margin-bottom: 6px; color: var(--violet); font-size: 9px; }
 .admin-panel-heading h2 { margin: 0; font-size: 25px; letter-spacing: -.04em; }
 .admin-panel-heading > span { color: var(--dim); font: 700 9px/1 ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; }
-.admin-add-form { display: grid; grid-template-columns: 1fr 1fr 1fr .65fr; align-items: end; gap: 12px; }
+.admin-add-form { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: end; gap: 12px; }
 .admin-add-form label, .admin-password-panel label { display: grid; min-width: 0; gap: 7px; color: var(--muted); font-size: 11px; font-weight: 700; }
 .admin-add-form input, .admin-add-form select, .admin-password-panel input { width: 100%; height: 44px; min-width: 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; outline: 0; color: var(--ink); background: #0d0f13; }
 .admin-add-form input:focus, .admin-add-form select:focus, .admin-password-panel input:focus { border-color: rgba(184,255,74,.62); box-shadow: 0 0 0 3px rgba(184,255,74,.1); }
-.admin-add-url { grid-column: span 2; }
-.admin-add-built { grid-column: span 2; }
+.admin-add-name { grid-column: span 4; }
+.admin-add-url { grid-column: span 8; }
+.admin-add-bid { grid-column: span 2; }
+.admin-add-category { grid-column: span 3; }
+.admin-add-built { grid-column: span 4; }
+.admin-add-time, .admin-add-unit { grid-column: span 3; }
+.admin-add-submit { grid-column: span 6; }
 .admin-add-form .button { min-height: 44px; }
 .admin-search { display: grid; grid-template-columns: minmax(220px, 1fr) 140px auto auto 1fr; align-items: center; gap: 9px; margin-bottom: 14px; }
 .admin-search label { min-width: 0; }
@@ -717,7 +722,8 @@ a { color: inherit; text-decoration: none; }
   .steps-grid article:last-child { border-bottom: 0; }
   .steps-grid h3 { margin-top: 45px; }
   .admin-add-form { grid-template-columns: 1fr 1fr; }
-  .admin-add-url, .admin-add-built { grid-column: auto; }
+  .admin-add-name, .admin-add-bid, .admin-add-category, .admin-add-time, .admin-add-unit { grid-column: span 1; }
+  .admin-add-url, .admin-add-built, .admin-add-submit { grid-column: span 2; }
   .admin-password-panel form { grid-template-columns: 1fr 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .settings-url-form { grid-template-columns: 1fr 1fr; }
@@ -762,6 +768,7 @@ a { color: inherit; text-decoration: none; }
   .highlight-list--clicks li { grid-template-columns: 21px minmax(0, 1fr) auto; column-gap: 6px; }
   .highlight-list li > a { font-size: 11px; }
   .admin-add-form, .admin-password-panel form { grid-template-columns: 1fr; }
+  .admin-add-form > * { grid-column: 1 / -1; }
   .admin-add-form .button, .admin-password-panel .button { width: 100%; }
   .admin-search { grid-template-columns: 1fr 115px; }
   .admin-search .button { width: 100%; }

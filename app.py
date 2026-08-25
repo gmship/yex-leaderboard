@@ -445,14 +445,11 @@ def validate_submission(data: dict) -> dict:
         raise ValueError("Unable to accept this submission.")
 
     name = str(data.get("name", "")).strip()
-    tagline = str(data.get("tagline", "")).strip()
     build_time_unit = str(data.get("build_time_unit", "")).strip()
     terms_accepted = data.get("terms_accepted")
 
     if not 2 <= len(name) <= 64:
         raise ValueError("Product name must be 2–64 characters.")
-    if not 8 <= len(tagline) <= 180:
-        raise ValueError("Tagline must be 8–180 characters.")
     if build_time_unit not in TIME_UNITS:
         raise ValueError("Choose a valid build-time unit.")
     if terms_accepted not in {True, "true", "1", "on", 1}:
@@ -490,7 +487,7 @@ def validate_submission(data: dict) -> dict:
         "name": name,
         "url": product_url,
         "favicon_url": submission_favicon_url(str(data.get("favicon_url", "")), product_url),
-        "tagline": tagline,
+        "tagline": name,
         "categories": categories,
         "built_with": built_with,
         "build_time_value": build_time_value,

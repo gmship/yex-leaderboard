@@ -9,7 +9,7 @@
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
   <script src="{{ url_for('static', filename='theme.js', v='20260825-1') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-26') }}">
-  <script src="{{ url_for('static', filename='app.js', v='20260825-10') }}" defer></script>
+  <script src="{{ url_for('static', filename='app.js', v='20260825-11') }}" defer></script>
 </head>
 <body>
   <div class="page-glow page-glow--one"></div>
@@ -177,13 +177,12 @@
         <input name="favicon_url" type="hidden" value="">
         <div class="form-grid">
           <div class="url-import field--wide">
-            <div class="field-heading"><strong>Start with your URL</strong><span>We'll pull in the name and description.</span></div>
+            <div class="field-heading"><strong>Start with your URL</strong><span>We'll pull in the name.</span></div>
             <div class="field url-field"><label for="product-url">Product URL</label><div class="url-import-row"><input id="product-url" name="url" type="url" placeholder="https://yourbuild.com" required><button class="button button--fetch" id="fetch-details" type="button">Fetch details</button></div></div>
             <p class="fetch-status" id="fetch-status" aria-live="polite"></p>
           </div>
 
-          <label class="field"><span>Product name <small>editable</small></span><input name="name" maxlength="64" placeholder="Your product name" required></label>
-          <label class="field"><span>Description <small>editable</small></span><textarea name="tagline" maxlength="180" placeholder="A short description of what your product does" required></textarea></label>
+          <label class="field field--wide"><span>Product name <small>editable</small></span><input name="name" maxlength="64" placeholder="Your product name" required></label>
 
           <fieldset class="built-with-card field--wide tool-picker">
             <legend class="sr-only">Mainly built with</legend>

@@ -9,15 +9,15 @@
     <div class="admin-panel-heading"><div><p class="eyebrow">Quick action</p><h2 id="add-link-title">Add link</h2></div><span>Live immediately</span></div>
     <form class="admin-add-form" method="post" action="{{ url_for('admin_add_project') }}">
       <input type="hidden" name="admin_token" value="{{ add_token }}">
-      <label><span>Name</span><input type="text" name="name" maxlength="64" required placeholder="Project name"></label>
+      <label class="admin-add-name"><span>Name</span><input type="text" name="name" maxlength="64" required placeholder="Project name"></label>
       <label class="admin-add-url"><span>URL</span><input type="url" name="url" required placeholder="https://example.com" spellcheck="false"></label>
-      <label><span>Bid ($)</span><input type="number" name="bid_dollars" min="1" max="10000" step="1" value="1" required></label>
-      <label><span>Primary category</span><select name="category_primary" required>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
-      <label><span>Second category</span><select name="category_secondary"><option value="">None</option>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
+      <label class="admin-add-bid"><span>Bid ($)</span><input type="number" name="bid_dollars" min="1" max="10000" step="1" value="1" required></label>
+      <label class="admin-add-category"><span>Primary category</span><select name="category_primary" required>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
+      <label class="admin-add-category"><span>Second category</span><select name="category_secondary"><option value="">None</option>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
       <label class="admin-add-built"><span>Mainly built with</span><select name="built_with" required>{% for tool in tools %}<option value="{{ tool }}">{{ tool }}</option>{% endfor %}</select></label>
-      <label><span>Build time</span><input type="number" name="build_time_value" min="0.1" max="10000" step="0.1" value="1" required></label>
-      <label><span>Unit</span><select name="build_time_unit" required><option value="minutes">minutes</option><option value="hours" selected>hours</option><option value="days">days</option><option value="weeks">weeks</option></select></label>
-      <button class="button button--primary" type="submit">Add link</button>
+      <label class="admin-add-time"><span>Build time</span><input type="number" name="build_time_value" min="0.1" max="10000" step="0.1" value="1" required></label>
+      <label class="admin-add-unit"><span>Unit</span><select name="build_time_unit" required><option value="minutes">minutes</option><option value="hours" selected>hours</option><option value="days">days</option><option value="weeks">weeks</option></select></label>
+      <button class="button button--primary admin-add-submit" type="submit">Add link</button>
     </form>
   </section>
   <form class="admin-search" method="get" action="{{ url_for('admin_dashboard') }}">

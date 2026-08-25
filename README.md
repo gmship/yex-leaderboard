@@ -11,7 +11,7 @@ The repository starts with ten fictional `example.com` listings. It contains no 
 ## Features
 
 - Public leaderboard ranked by bid.
-- Anonymous public submissions with exactly one **Mainly built with** tool.
+- Anonymous public submissions with one Name field for name and display text, plus exactly one **Mainly built with** tool.
 - Bid-only **Help bid** flow for existing listings; public users cannot rewrite listing details.
 - Shareable product detail pages with spend, rank, clicks, build time, visit, and sharing actions.
 - New listings and Top clicks panels with click counts.

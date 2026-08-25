@@ -52,6 +52,8 @@ class AppTests(unittest.TestCase):
         self.assertIn(b"data-project-slug=", response.data)
         self.assertNotIn(b"data-project-url=", response.data)
         self.assertIn(b'name="terms_accepted"', response.data)
+        self.assertIn(b"We'll pull in the name.", response.data)
+        self.assertNotIn(b'name="tagline"', response.data)
         self.assertIn(b"All payments are final.", response.data)
         self.assertIn(b"One purchase keeps the listing live for the lifetime of Whatever Board", response.data)
         self.assertIn(b'href="/rules"', response.data)
@@ -295,6 +297,7 @@ class AppTests(unittest.TestCase):
             }
         )
         self.assertEqual(anonymous["submitted_by"], "Anonymous")
+        self.assertEqual(anonymous["tagline"], anonymous["name"])
         self.assertIsNone(anonymous["x_user_id"])
         self.assertIsNone(anonymous["x_handle"])
 
@@ -624,6 +627,8 @@ class AppTests(unittest.TestCase):
         self.assertIn(b"Mainly built with", admin_response.data)
         self.assertIn(b"Build time", admin_response.data)
         self.assertNotIn(b'name="tagline"', admin_response.data)
+        self.assertIn(b'class="admin-add-name"', admin_response.data)
+        self.assertIn(b'admin-add-submit', admin_response.data)
         self.assertIn(b'<details class="admin-project-details">', admin_response.data)
         self.assertNotIn(b'<details class="admin-project-details" open', admin_response.data)
         self.assertEqual(admin_response.headers["X-Robots-Tag"], "noindex, nofollow")
