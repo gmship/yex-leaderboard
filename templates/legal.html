@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set title = {'rules': 'Listing Rules', 'terms': 'Terms of Service', 'privacy': 'Privacy Policy'}[document] %}
+  <meta name="description" content="{{ title }} for {{ site_name }}.">
+  <title>{{ title }} — {{ site_name }}</title>
+  <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ url_for(document) }}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='theme.js', v='20260825-1') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-20') }}">
+</head>
+<body>
+  <div class="page-glow page-glow--one"></div>
+  <div class="page-glow page-glow--two"></div>
+
+  <header class="site-header legal-header shell">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="{{ site_name }} home">
+      <span class="brand-mark">Y</span>
+      <span>{{ site_name }}</span>
+    </a>
+    <nav class="legal-nav" aria-label="Legal pages">
+      <a{% if document == 'rules' %} class="is-active"{% endif %} href="{{ url_for('rules') }}">Rules</a>
+      <a{% if document == 'terms' %} class="is-active"{% endif %} href="{{ url_for('terms') }}">Terms</a>
+      <a{% if document == 'privacy' %} class="is-active"{% endif %} href="{{ url_for('privacy') }}">Privacy</a>
+    </nav>
+    <div class="header-actions">
+      <button class="theme-toggle js-theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Switch to light theme"><span class="theme-icon theme-icon--sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon--moon" aria-hidden="true">☾</span><span class="sr-only">Toggle color theme</span></button>
+      <a class="button button--small button--ghost" href="{{ url_for('home') }}">Back to board <span>↗</span></a>
+    </div>
+  </header>
+
+  <main class="legal-page shell">
+    <header class="legal-title">
+      <p class="eyebrow">{{ site_name }} / legal</p>
+      <h1>{{ title }}</h1>
+      <p>Last updated: August 25, 2026</p>
+    </header>
+
+    {% if document in ('rules', 'terms') %}
+      <aside class="legal-callout" aria-label="Payment policy">
+        <span>Payment policy</span>
+        <strong>All payments are final.</strong>
+        <p>Review your listing details and bid before checkout. Except where applicable law requires otherwise, payments are non-refundable and cannot be cancelled. A one-time purchase provides a listing for as long as {{ site_name }} continues to operate, provided the listing follows the Rules.</p>
+      </aside>
+    {% endif %}
+
+    <article class="legal-copy">
+      {% if document == 'rules' %}
+        <section>
+          <h2>1. What belongs on {{ site_name }}</h2>
+          <p>Submit a real, publicly reachable product, project, or website that was built with meaningful help from one or more AI tools. The destination must work and must match the listing.</p>
+        </section>
+        <section>
+          <h2>2. Be accurate</h2>
+          <p>Use a truthful product name, URL, tagline, category, AI-tool list, build time, and attribution. Do not impersonate another builder, claim work you did not create or have permission to submit, or manipulate the board with misleading information.</p>
+        </section>
+        <section>
+          <h2>3. Keep it safe and lawful</h2>
+          <p>Listings may not be spam or promote malware, phishing, fraud, illegal activity, infringement, harassment, hateful content, sexual exploitation, or deceptive products. Do not submit URLs that redirect visitors somewhere materially different from the listed product or otherwise harm {{ site_name }}, its visitors, reputation, security, availability, or infrastructure.</p>
+        </section>
+        <section>
+          <h2>4. One URL, one listing</h2>
+          <p>Each canonical product URL has one listing. A later payment for that same URL increases its cumulative bid; it does not create a duplicate listing, transfer ownership, or rewrite the existing listing.</p>
+        </section>
+        <section>
+          <h2>5. Ranking</h2>
+          <p>The board ranks live listings primarily by cumulative paid bid. Other builders may pay to move above you, so a purchase does not guarantee a particular rank, amount of traffic, number of clicks, or business result.</p>
+        </section>
+        <section>
+          <h2>6. Listing lifetime and moderation</h2>
+          <p>A one-time purchase keeps a compliant listing live for the lifetime of {{ site_name }}. The listing ends if {{ site_name }} permanently stops operating. We may immediately hide or permanently delete a listing or URL that we determine is spam, malicious, deceptive, unsafe, harmful to {{ site_name }} or its visitors, in violation of these Rules, unreachable, or subject to a valid legal request. Removal for any such reason does not create a right to a refund, except where required by law.</p>
+        </section>
+      {% elif document == 'terms' %}
+        <section>
+          <h2>1. Agreement</h2>
+          <p>By using {{ site_name }}, submitting a listing, or making a payment, you agree to these Terms, the <a href="{{ url_for('rules') }}">Rules</a>, and the <a href="{{ url_for('privacy') }}">Privacy Policy</a>. You must have legal capacity to make the purchase and authority to submit the listing.</p>
+        </section>
+        <section>
+          <h2>2. The service</h2>
+          <p>{{ site_name }} is a public leaderboard and discovery directory. Listings are ranked by cumulative paid bid. We may maintain, improve, redesign, suspend, or discontinue the service.</p>
+        </section>
+        <section>
+          <h2>3. Payments, refunds, and duration</h2>
+          <p>Payments are one-time listing and leaderboard-bid payments processed by Stripe. Check the URL, listing information, and amount before completing checkout. All payments are final and non-refundable, with no cancellation or account credit, except where applicable law requires otherwise.</p>
+          <p>Your initial payment creates the listing after successful payment confirmation. Later payments for the same URL add to its bid. A one-time purchase provides a listing for the lifetime of {{ site_name }}—not forever independently of the service—and ends when {{ site_name }} permanently closes. A listing must continue to comply with the Rules.</p>
+        </section>
+        <section>
+          <h2>4. Your listing</h2>
+          <p>You represent that the information you submit is accurate and that you have the rights and permissions needed to submit it. You keep ownership of your content and grant {{ site_name }} a worldwide, non-exclusive, royalty-free license to display, format, reproduce, and link to that content for operating and promoting the directory.</p>
+        </section>
+        <section>
+          <h2>5. Moderation</h2>
+          <p>We may reject, immediately hide, or permanently delete a listing or URL that we determine is spam, malicious, deceptive, unsafe, harmful to {{ site_name }} or its visitors, in violation of the Rules, unreachable, or subject to a valid legal request. We may also edit a listing for formatting or accuracy. Removal for any such reason does not entitle you to a refund, except where required by law. Paying does not purchase ownership of {{ site_name }}, editorial control, a guaranteed rank, or immunity from moderation.</p>
+        </section>
+        <section>
+          <h2>6. Availability and disclaimers</h2>
+          <p>The service is provided “as is” and “as available.” We do not promise uninterrupted availability, permanent storage, a specific search-engine treatment, traffic, clicks, sales, or ranking. Third-party projects listed on the board are operated by their own creators; {{ site_name }} does not endorse or control them.</p>
+        </section>
+        <section>
+          <h2>7. Liability</h2>
+          <p>To the fullest extent permitted by law, {{ site_name }} and its operator will not be liable for indirect, incidental, special, consequential, or lost-profit damages arising from the service. Total liability for a claim relating to a paid listing will not exceed the amount you paid for that listing during the twelve months before the claim. Nothing here excludes liability that cannot lawfully be excluded.</p>
+        </section>
+        <section>
+          <h2>8. Changes</h2>
+          <p>We may update these Terms by posting a revised version and date. Material changes apply prospectively. Continued use after an update means you accept the revised Terms.</p>
+        </section>
+      {% else %}
+        <section>
+          <h2>1. Information you provide</h2>
+          <p>When you submit a listing, we collect the product name, URL, tagline, categories, AI tools used, build time, attribution, optional X information, and the bid amount. If you ask us to fetch site details, our server visits the submitted public URL and reads limited page metadata such as its title, description, and favicon.</p>
+        </section>
+        <section>
+          <h2>2. Payment information</h2>
+          <p>Payments are processed by Stripe. Stripe may collect contact, billing, payment-method, transaction, device, and fraud-prevention information under its own <a href="https://stripe.com/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>. {{ site_name }} stores transaction references, the amount, currency, payment status, and the listing connected to a payment. We do not receive or store your full card number.</p>
+        </section>
+        <section>
+          <h2>3. Information collected automatically</h2>
+          <p>We use a necessary signed session cookie containing a random visitor identifier and visit state. We record aggregate visits, recent online-presence timestamps, and outbound listing clicks. We also store a one-way hash derived from the visitor IP address to rate-limit checkout attempts and reduce click abuse. Standard server logs may contain request details such as IP address, time, path, browser information, and response status.</p>
+        </section>
+        <section>
+          <h2>4. How we use information</h2>
+          <p>We use information to publish and rank listings, process and verify payments, retrieve requested site previews, operate traffic counters, prevent spam and fraud, secure and debug the service, enforce the Rules, and comply with legal obligations.</p>
+        </section>
+        <section>
+          <h2>5. When information is shared</h2>
+          <p>Public listing fields are visible to everyone. We share information with Stripe to process payments and with infrastructure providers as needed to host and secure the service. We may also disclose information when required by law, to respond to valid legal process, or to protect users, the service, and others. We do not sell personal information or use it for third-party targeted advertising.</p>
+        </section>
+        <section>
+          <h2>6. Retention and security</h2>
+          <p>Listing and related payment records may be kept while {{ site_name }} operates and afterward where reasonably needed for accounting, dispute handling, security, or legal compliance. Short-lived presence and abuse-prevention records are removed or rotated when no longer needed. We use reasonable safeguards, but no online service can guarantee absolute security.</p>
+        </section>
+        <section>
+          <h2>7. Your choices and rights</h2>
+          <p>You can block cookies in your browser, although visit and online-presence features may not work correctly. Depending on where you live, you may have rights to request access, correction, deletion, restriction, or objection regarding personal information. Privacy rights and valid legal obligations can override ordinary listing-retention rules.</p>
+        </section>
+        <section>
+          <h2>8. International use and changes</h2>
+          <p>{{ site_name }} and its providers may process information in countries other than your own. We may update this Policy as the service changes and will post the new date on this page.</p>
+        </section>
+      {% endif %}
+
+      <section>
+        <h2>{% if document == 'rules' %}7{% elif document == 'terms' %}9{% else %}9{% endif %}. Contact</h2>
+        <p>Questions, correction requests, and legal or privacy requests should be sent to the site operator. Do not include payment-card details or other sensitive information.</p>
+      </section>
+    </article>
+  </main>
+
+  <footer class="site-footer site-footer--share shell">
+    <div class="footer-credit"><span>Made with <a href="https://yex.lol" target="_blank" rel="noreferrer">Yex</a></span></div>
+  </footer>
+</body>
+</html>

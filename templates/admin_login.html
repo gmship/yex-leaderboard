@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin login — {{ site_name }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='theme.js', v='20260825-1') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-22') }}">
+</head>
+<body>
+  <div class="page-glow page-glow--one"></div>
+  <div class="page-glow page-glow--two"></div>
+  <button class="theme-toggle theme-toggle--floating js-theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Switch to light theme"><span class="theme-icon theme-icon--sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon--moon" aria-hidden="true">☾</span><span class="sr-only">Toggle color theme</span></button>
+
+  <main class="admin-login-page">
+    <form class="admin-login-card" method="post" action="{{ url_for('admin_login') }}">
+      <a class="brand" href="{{ url_for('home') }}" aria-label="{{ site_name }} home">
+        <span class="brand-mark">Y</span>
+        <span>{{ site_name }}</span>
+      </a>
+      <p class="eyebrow">Private workspace</p>
+      <h1>Admin login</h1>
+      <p>Enter the administrator login to manage listing URLs.</p>
+      {% if error %}<div class="form-error" role="alert">{{ error }}</div>{% endif %}
+      <input type="hidden" name="admin_token" value="{{ admin_token }}">
+      <label class="admin-url-field">
+        <span>Username</span>
+        <input type="text" name="username" required autocomplete="username" autofocus>
+      </label>
+      <label class="admin-url-field">
+        <span>Password</span>
+        <input type="password" name="password" required autocomplete="current-password">
+      </label>
+      <button class="button button--primary button--wide" type="submit">Open link manager</button>
+    </form>
+  </main>
+</body>
+</html>

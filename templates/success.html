@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if project %}You're on the board{% else %}Payment received{% endif %} — {{ site_name }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='theme.js', v='20260825-1') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-20') }}">
+</head>
+<body class="success-page">
+  <button class="theme-toggle theme-toggle--floating js-theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Switch to light theme"><span class="theme-icon theme-icon--sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon--moon" aria-hidden="true">☾</span><span class="sr-only">Toggle color theme</span></button>
+  <main class="success-card">
+    <a class="brand" href="/"><span class="brand-mark">Y</span><span>{{ site_name }}</span></a>
+    {% if project %}
+      <span class="success-check">✓</span>
+      <p class="eyebrow">Payment confirmed</p>
+      <h1>{{ project.name }} is on the board.</h1>
+      <p>Your build is live and ranked by its total bid. Share the board, get seen, and come back to outbid the next launch.</p>
+      <a class="button button--primary" href="/#leaderboard">See the leaderboard</a>
+    {% else %}
+      <span class="success-check">…</span>
+      <p class="eyebrow">Confirmation pending</p>
+      <h1>We’re checking your payment.</h1>
+      <p>Stripe may still be finalizing the payment. Refresh in a moment or return to the board.</p>
+      <a class="button button--primary" href="/#leaderboard">Return to the board</a>
+    {% endif %}
+  </main>
+</body>
+</html>

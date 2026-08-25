@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>{% block title %}Admin{% endblock %} — {{ site_name }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='theme.js', v='20260825-1') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-22') }}">
+</head>
+<body>
+  <div class="page-glow page-glow--one"></div><div class="page-glow page-glow--two"></div>
+  <header class="site-header admin-header shell">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="{{ site_name }} home"><span class="brand-mark">Y</span><span>{{ site_name }}</span></a>
+    <nav class="admin-nav" aria-label="Admin navigation">
+      <a{% if admin_section == 'links' %} class="is-active"{% endif %} href="{{ url_for('admin_dashboard') }}">Link manager</a>
+      <a{% if admin_section == 'stats' %} class="is-active"{% endif %} href="{{ url_for('admin_stats') }}">Stats</a>
+      <a{% if admin_section == 'settings' %} class="is-active"{% endif %} href="{{ url_for('admin_settings') }}">Settings</a>
+    </nav>
+    <div class="header-actions">
+      <button class="theme-toggle js-theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Switch to light theme"><span class="theme-icon theme-icon--sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon--moon" aria-hidden="true">☾</span><span class="sr-only">Toggle color theme</span></button>
+      <a class="button button--small button--ghost admin-view-link" href="{{ url_for('home') }}">View board <span>↗</span></a>
+      <form method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="admin_token" value="{{ logout_token }}"><button class="button button--small button--ghost" type="submit">Log out</button></form>
+    </div>
+  </header>
+  <main class="admin-page shell">{% block content %}{% endblock %}</main>
+</body>
+</html>

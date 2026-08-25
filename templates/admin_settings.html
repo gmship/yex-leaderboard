@@ -1,0 +1,33 @@
+{% extends "admin_base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+  <header class="admin-title"><div><p class="eyebrow">Admin / configuration</p><h1>Settings</h1></div><p>Manage administrator access and the options shown in listing forms.</p></header>
+  {% if error %}<div class="form-error" role="alert">{{ error }}</div>{% endif %}{% if request.args.get('password_updated') %}<div class="form-success" role="status">Administrator password updated.</div>{% endif %}{% if request.args.get('outbound_updated') %}<div class="form-success" role="status">URL settings updated.</div>{% endif %}{% if request.args.get('seo_updated') %}<div class="form-success" role="status">SEO settings updated.</div>{% endif %}{% if request.args.get('updated') %}<div class="form-success" role="status">Options updated.</div>{% endif %}
+  <section class="settings-panel settings-url-panel">
+    <header><div><p class="eyebrow">Outbound links</p><h2>URL behavior</h2></div><span>{{ 'Direct + tracking' if outbound.mode == 'direct' else '/go/ redirect' }}</span></header>
+    <form class="settings-url-form" method="post" action="{{ url_for('admin_update_outbound_settings') }}">
+      <input type="hidden" name="admin_token" value="{{ outbound_token }}">
+      <label><span>Public URL mode</span><select name="mode"><option value="direct"{% if outbound.mode == 'direct' %} selected{% endif %}>Direct tracked link</option><option value="go"{% if outbound.mode == 'go' %} selected{% endif %}>/go/ redirect</option></select></label>
+      <label><span>Tracking parameter</span><input type="text" name="tracking_parameter" maxlength="50" pattern="[A-Za-z0-9_.-]+" value="{{ outbound.tracking_parameter|e }}" placeholder="utm_source" required></label>
+      <label><span>Tracking value</span><input type="text" name="tracking_value" maxlength="100" value="{{ outbound.tracking_value|e }}" placeholder="yex" required></label>
+      <button class="button button--small button--primary" type="submit">Save URL settings</button>
+    </form>
+    <p class="settings-url-example">Direct mode exposes the destination with your tracking code. Go mode shows <code>/go/project-slug</code> and adds the same code after redirecting.</p>
+  </section>
+  <section class="settings-panel settings-url-panel">
+    <header><div><p class="eyebrow">Search appearance</p><h2>SEO</h2></div><span>Homepage metadata</span></header>
+    <form class="settings-seo-form" method="post" action="{{ url_for('admin_update_seo_settings') }}">
+      <input type="hidden" name="admin_token" value="{{ seo_token }}">
+      <label><span>SEO title</span><input type="text" name="title" minlength="5" maxlength="70" value="{{ seo.title|e }}" required></label>
+      <label><span>Meta description</span><input type="text" name="description" minlength="20" maxlength="180" value="{{ seo.description|e }}" required></label>
+      <button class="button button--small button--primary" type="submit">Save SEO</button>
+    </form>
+    <p class="settings-url-example">These values control the homepage browser title and search-result description.</p>
+  </section>
+  <section class="settings-panel"><header><div><p class="eyebrow">Access</p><h2>Administrator password</h2></div><span>Stored as a one-way hash</span></header><form class="settings-password-form" method="post" action="{{ url_for('admin_change_password') }}"><input type="hidden" name="admin_token" value="{{ password_token }}"><label><span>Current password</span><input type="password" name="current_password" required autocomplete="current-password"></label><label><span>New password</span><input type="password" name="new_password" minlength="4" required autocomplete="new-password"></label><label><span>Confirm new password</span><input type="password" name="confirm_password" minlength="4" required autocomplete="new-password"></label><button class="button button--small button--primary" type="submit">Update password</button></form></section>
+  <div class="settings-taxonomy-grid">
+    <section class="settings-panel"><header><div><p class="eyebrow">Listing type</p><h2>Categories</h2></div><span>{{ categories|length }} options</span></header><div class="settings-options">{% for category in categories %}<div><span>{{ category }}</span><form method="post" action="{{ url_for('admin_manage_taxonomy') }}"><input type="hidden" name="admin_token" value="{{ taxonomy_token }}"><input type="hidden" name="kind" value="category"><input type="hidden" name="operation" value="remove"><input type="hidden" name="name" value="{{ category|e }}"><button type="submit" aria-label="Remove {{ category }}">×</button></form></div>{% endfor %}</div><form class="settings-add-option" method="post" action="{{ url_for('admin_manage_taxonomy') }}"><input type="hidden" name="admin_token" value="{{ taxonomy_token }}"><input type="hidden" name="kind" value="category"><input type="hidden" name="operation" value="add"><label><span class="sr-only">New category</span><input type="text" name="name" maxlength="40" placeholder="New category" required></label><button class="button button--small button--primary" type="submit">Add</button></form></section>
+    <section class="settings-panel"><header><div><p class="eyebrow">AI stack</p><h2>Built with</h2></div><span>{{ tools|length }} options</span></header><div class="settings-options">{% for tool in tools %}<div><span>{{ tool }}</span><form method="post" action="{{ url_for('admin_manage_taxonomy') }}"><input type="hidden" name="admin_token" value="{{ taxonomy_token }}"><input type="hidden" name="kind" value="tool"><input type="hidden" name="operation" value="remove"><input type="hidden" name="name" value="{{ tool|e }}"><button type="submit" aria-label="Remove {{ tool }}">×</button></form></div>{% endfor %}</div><form class="settings-add-option" method="post" action="{{ url_for('admin_manage_taxonomy') }}"><input type="hidden" name="admin_token" value="{{ taxonomy_token }}"><input type="hidden" name="kind" value="tool"><input type="hidden" name="operation" value="add"><label><span class="sr-only">New AI tool</span><input type="text" name="name" maxlength="40" placeholder="New AI tool" required></label><button class="button button--small button--primary" type="submit">Add</button></form></section>
+  </div>
+  <p class="settings-note">Removing an option stops it appearing in future forms. Existing listings keep their saved category and tool labels.</p>
+{% endblock %}

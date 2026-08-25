@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{% if active_tool %}{{ active_tool.description }}{% else %}{{ seo.description|e }}{% endif %}">
+  <title>{% if active_tool %}Projects built with {{ active_tool.name }} — {{ site_name }}{% else %}{{ seo.title|e }}{% endif %}</title>
+  <link rel="canonical" href="{% if active_tool %}{{ request.url_root.rstrip('/') }}{{ url_for('built_with', tool_slug=active_tool.slug) }}{% else %}{{ request.url_root.rstrip('/') }}/{% endif %}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='theme.js', v='20260825-1') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-23') }}">
+  <script src="{{ url_for('static', filename='app.js', v='20260825-6') }}" defer></script>
+</head>
+<body>
+  <div class="page-glow page-glow--one"></div>
+  <div class="page-glow page-glow--two"></div>
+
+  <header class="site-header shell">
+    <a class="brand" href="/" aria-label="{{ site_name }} home">
+      <span class="brand-mark">Y</span>
+      <span>{{ site_name }}</span>
+    </a>
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="#leaderboard">Leaderboard</a>
+    </nav>
+    <div class="header-actions">
+      <button class="theme-toggle js-theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Switch to light theme"><span class="theme-icon theme-icon--sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon--moon" aria-hidden="true">☾</span><span class="sr-only">Toggle color theme</span></button>
+      <button class="button button--small button--ghost js-open-submit" type="button">List your build <span>↗</span></button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero shell">
+      <div class="hero-motif hero-motif--orbit" aria-hidden="true"><span></span></div>
+      <div class="hero-motif hero-motif--spark" aria-hidden="true">✦</div>
+      <div class="hero-motif hero-motif--code" aria-hidden="true">&lt;/&gt;</div>
+      <div class="hero-motif hero-motif--pixels" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="hero-copy">
+        <div class="traffic-pill" aria-label="Live traffic">
+          <span class="live-dot" aria-hidden="true"></span>
+          <strong id="online-count">{{ online_count }}</strong><span>online</span>
+          <span class="traffic-divider">·</span>
+          <strong id="total-visits">{{ "{:,}".format(total_visits) }}</strong><span>visitors since launch</span>
+        </div>
+        <p class="eyebrow">{% if active_tool %}Built with {{ active_tool.name }}{% else %}The open launch board{% endif %}</p>
+        <h1{% if not active_tool %} class="hero-title--home"{% endif %}>{% if active_tool %}Projects built with <span class="hero-outline">{{ active_tool.name }}.</span>{% else %}The leaderboard for things <span class="hero-outline">whatever you want</span>.{% endif %}</h1>
+        <p class="hero-tagline">Ship it. List it. Outbid it.</p>
+        {% if active_tool %}<p class="hero-body">{{ active_tool.description }} Ranked by real bids, build time, and the people who shipped them.</p>{% endif %}
+        <div class="hero-actions">
+          <button class="button button--primary js-open-submit" type="button">List for ${{ min_bid }}</button>
+        </div>
+        <p class="hero-subline"><span class="hero-subline-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M10 13a5 5 0 0 0 7.07.07l2-2A5 5 0 0 0 12 4l-1.15 1.15"></path><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15"></path></svg></span><span>You built it. Now get people to see it. A public launch board with <span class="dofollow-link">dofollow links</span>.</span></p>
+      </div>
+    </section>
+
+    <section class="board shell" id="leaderboard">
+      <div class="section-heading">
+        <div>
+          {% if active_tool %}<p class="eyebrow">{{ active_tool.name }} leaderboard</p>{% endif %}
+          <div class="section-title-row">
+            <h2>{% if active_tool %}Built with {{ active_tool.name }}{% else %}Live leaderboard{% endif %}</h2>
+            <span class="section-signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+        </div>
+        <div class="board-count"><span>{{ total_projects }}</span> builds on board</div>
+      </div>
+
+      {% if not active_tool %}
+        <div class="board-highlights">
+          <section class="highlight-list" aria-labelledby="new-listings-title">
+            <header><h3 id="new-listings-title">New listings</h3><span>Latest 10</span></header>
+            <ol>
+              {% for project in newest_listings %}<li><span>{{ loop.index }}</span><a href="{{ project|listing_url|e }}"{% if outbound_mode == 'direct' %} data-click-slug="{{ project.slug|e }}"{% endif %} target="_blank" rel="noreferrer">{{ project.name }}</a></li>{% else %}<li class="highlight-empty">No listings yet</li>{% endfor %}
+            </ol>
+          </section>
+          <section class="highlight-list highlight-list--clicks" aria-labelledby="top-clicks-title">
+            <header><h3 id="top-clicks-title">Top clicks</h3><span>Top 10</span></header>
+            <ol>
+              {% for project in top_clicked_listings %}<li><span>{{ loop.index }}</span><a href="{{ project|listing_url|e }}"{% if outbound_mode == 'direct' %} data-click-slug="{{ project.slug|e }}"{% endif %} target="_blank" rel="noreferrer">{{ project.name }}</a><span class="highlight-clicks">{{ project.clicks }} click{% if project.clicks != 1 %}s{% endif %}</span></li>{% else %}<li class="highlight-empty">No listings yet</li>{% endfor %}
+            </ol>
+          </section>
+        </div>
+      {% endif %}
+
+      <div class="board-toolbar">
+        <nav class="filter-pills" aria-label="Browse by AI tool">
+          <a class="filter-pill{% if not active_tool %} is-active{% endif %}" href="{{ url_for('home') }}#leaderboard">All apps</a>
+          {% for tool in featured_tools %}
+            <a class="filter-pill{% if active_tool and active_tool.slug == tool.slug %} is-active{% endif %}" href="{{ url_for('built_with', tool_slug=tool.slug) }}#leaderboard">{{ tool.name }}</a>
+          {% endfor %}
+          <details class="tool-more{% if active_tool and active_tool in more_tools %} is-active{% endif %}">
+            <summary class="filter-pill">Other <span aria-hidden="true">⌄</span></summary>
+            <div class="tool-more-menu">
+              {% for tool in more_tools %}<a class="{% if active_tool and active_tool.slug == tool.slug %}is-active{% endif %}" href="{{ url_for('built_with', tool_slug=tool.slug) }}#leaderboard">{{ tool.name }}</a>{% endfor %}
+            </div>
+          </details>
+        </nav>
+        <label class="sort-control">
+          <span>Sort</span>
+          <select id="sort-projects">
+            <option value="bid">Top bid</option>
+            <option value="fastest">Fastest build</option>
+            <option value="newest">Newest</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="project-list" id="project-list" data-page-offset="{{ page_offset }}">
+        {% for project in projects %}
+          {% if project.rank == 11 %}<div class="top-ten-divider"><span>Top 10</span><em>More builds</em></div>{% endif %}
+          {% set minutes = project.build_time_value * {'minutes': 1, 'hours': 60, 'days': 1440, 'weeks': 10080}[project.build_time_unit] %}
+          <article class="project-row{% if project.rank <= 3 %} project-row--top project-row--top-{{ project.rank }}{% endif %}"
+                   data-built-with="{{ project.built_with|join('|')|e }}"
+                   data-bid="{{ project.total_bid_cents }}"
+                   data-minutes="{{ minutes }}"
+                   data-created="{{ project.created_at }}">
+            <div class="rank-cell"><span class="rank-number">#{{ '%02d'|format(project.rank) }}</span></div>
+            <div class="project-icon" aria-hidden="true"><span>{{ project.name[0]|upper }}</span><img class="project-favicon" src="{{ project.favicon_url|e }}" alt="" loading="lazy"></div>
+            <div class="project-main">
+              <div class="project-title-line">
+                <h3><a href="{{ project|listing_url|e }}"{% if outbound_mode == 'direct' %} data-click-slug="{{ project.slug|e }}"{% endif %} target="_blank" rel="noreferrer">{{ project.name }}</a></h3>
+                {% if project.is_demo %}<span class="demo-label">Demo</span>{% endif %}
+              </div>
+              <p>{{ project.tagline }}</p>
+              <div class="project-meta">
+                <span class="meta-label">Cat</span>
+                {% for category in project.categories[:2] %}<span class="tool-chip">{{ category }}</span>{% endfor %}
+                <span class="meta-divider"></span>
+                <span class="meta-label">Build time</span>
+                <strong>{{ '%g'|format(project.build_time_value) }} {{ {'minutes': 'minute', 'hours': 'hour', 'days': 'day', 'weeks': 'week'}[project.build_time_unit] if project.build_time_value == 1 else project.build_time_unit }}</strong>
+                <span class="meta-divider"></span>
+                <span class="click-count"><strong>{{ project.clicks }}</strong> click{% if project.clicks != 1 %}s{% endif %}</span>
+              </div>
+            </div>
+            <div class="bid-cell">
+              <span class="bid-amount">${{ '%.0f'|format(project.total_bid_cents / 100) }}</span>
+              <button class="outbid-button js-open-submit"
+                      type="button"
+                      data-next-bid="{{ (project.total_bid_cents / 100)|int + 1 }}">Outbid ↗</button>
+            </div>
+          </article>
+        {% else %}
+          <div class="empty-state">
+            <p>No builds yet.</p>
+            <button class="button button--primary js-open-submit" type="button">Be the first</button>
+          </div>
+        {% endfor %}
+      </div>
+      {% if total_pages > 1 %}
+        <nav class="pagination" aria-label="Leaderboard pages">
+          {% if current_page > 1 %}<a href="{% if active_tool %}{{ url_for('built_with', tool_slug=active_tool.slug, page=current_page - 1) }}{% else %}{{ url_for('home', page=current_page - 1) }}{% endif %}#leaderboard">← Previous</a>{% else %}<span></span>{% endif %}
+          <strong>Page {{ current_page }} of {{ total_pages }}</strong>
+          {% if current_page < total_pages %}<a href="{% if active_tool %}{{ url_for('built_with', tool_slug=active_tool.slug, page=current_page + 1) }}{% else %}{{ url_for('home', page=current_page + 1) }}{% endif %}#leaderboard">Next →</a>{% else %}<span></span>{% endif %}
+        </nav>
+      {% endif %}
+      <p class="no-results" id="no-results" hidden>No builds match this filter — yet.</p>
+    </section>
+
+  </main>
+
+  <footer class="site-footer site-footer--share shell">
+    <div class="footer-credit"><span>Made with <a href="https://yex.lol" target="_blank" rel="noreferrer">Yex</a></span></div>
+  </footer>
+
+  <dialog class="submit-dialog" id="submit-dialog">
+    <div class="dialog-shell">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Get on the board</p><h2>List your AI build</h2></div>
+        <button class="dialog-close" id="dialog-close" type="button" aria-label="Close submission form">×</button>
+      </div>
+      <form id="submission-form" autocomplete="off" novalidate>
+        <input name="favicon_url" type="hidden" value="">
+        <div class="form-grid">
+          <div class="url-import field--wide">
+            <div class="field-heading"><strong>Start with your URL</strong><span>We'll pull in the name and description.</span></div>
+            <div class="field url-field"><label for="product-url">Product URL</label><div class="url-import-row"><input id="product-url" name="url" type="url" placeholder="https://yourbuild.com" required><button class="button button--fetch" id="fetch-details" type="button">Fetch details</button></div></div>
+            <p class="fetch-status" id="fetch-status" aria-live="polite"></p>
+          </div>
+
+          <label class="field"><span>Product name <small>editable</small></span><input name="name" maxlength="64" placeholder="Your product name" required></label>
+          <label class="field"><span>Description <small>editable</small></span><textarea name="tagline" maxlength="180" placeholder="A short description of what your product does" required></textarea></label>
+
+          <fieldset class="built-with-card field--wide tool-picker">
+            <legend class="sr-only">Built with</legend>
+            <div class="built-with-heading"><div><span class="built-with-kicker">Most important</span><strong>Built with</strong></div><small>Select the AI tools you used · up to five</small></div>
+            <div>{% for tool in tools %}<label><input type="checkbox" name="built_with" value="{{ tool }}"><span>{{ tool }}</span></label>{% endfor %}</div>
+          </fieldset>
+
+          <fieldset class="field field--wide tool-picker category-picker"><legend>Cat <small>Choose up to two</small></legend><div>{% for category in categories %}<label><input type="checkbox" name="categories" value="{{ category }}"><span>{{ category }}</span></label>{% endfor %}</div></fieldset>
+          <div class="field field--time"><span>Build time</span><div><input name="build_time_value" type="number" min="0.1" max="10000" step="0.1" placeholder="3" required><select name="build_time_unit" required><option value="hours">hours</option><option value="minutes">minutes</option><option value="days">days</option><option value="weeks">weeks</option></select></div></div>
+          <div class="field submitted-field"><span>Submitted by <small>optional</small></span><div class="submitted-row"><input name="submitted_by" maxlength="40" placeholder="Anonymous"><button class="x-connect-button" id="connect-x" type="button">Connect 𝕏</button></div><small class="field-help" id="x-connect-status">Your X username will appear here after connecting.</small></div>
+          <label class="field honeypot" aria-hidden="true"><span>Company website</span><input name="company_website" tabindex="-1" autocomplete="off"></label>
+        </div>
+
+        <section class="bid-card" aria-labelledby="bid-title">
+          <div class="bid-card-heading"><div><span class="built-with-kicker">Your placement</span><h3 id="bid-title">Choose your bid</h3></div><span class="one-time-label">One-time payment</span></div>
+          <div class="bid-main">
+            <label class="bid-input"><span>$</span><input name="bid_dollars" id="bid-dollars" type="number" min="{{ min_bid }}" max="10000" step="1" value="{{ min_bid }}" data-base-min="{{ min_bid }}" autocomplete="off" aria-label="Bid amount in dollars" required></label>
+            <div class="quick-bids" aria-label="Quick bid amounts">{% for amount in [1, 3, 5, 10, 25] %}<button type="button" data-bid="{{ amount }}">${{ amount }}</button>{% endfor %}</div>
+          </div>
+          <div class="bid-result"><strong id="estimated-rank">Estimated starting position</strong><span>Higher bids rank above lower bids. $1 is the anti-spam minimum.</span></div>
+        </section>
+
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <div class="purchase-notice" role="note"><strong>All payments are final.</strong><span>Check your listing and bid carefully before paying. One purchase keeps the listing live for the lifetime of {{ site_name }}, subject to the Rules. No refunds except where required by law.</span></div>
+        <label class="terms-check"><input type="checkbox" name="terms_accepted" required><span>I agree to the <a href="{{ url_for('rules') }}" target="_blank" rel="noreferrer">Rules</a>, <a href="{{ url_for('terms') }}" target="_blank" rel="noreferrer">Terms</a>, and <a href="{{ url_for('privacy') }}" target="_blank" rel="noreferrer">Privacy Policy</a>.</span></label>
+        <button class="button button--primary button--wide" id="checkout-button" type="submit" {% if not payments_ready %}data-payments-pending="true"{% endif %}>
+          {% if payments_ready %}Continue to Stripe ↗{% else %}Stripe setup pending{% endif %}
+        </button>
+      </form>
+    </div>
+  </dialog>
+</body>
+</html>
