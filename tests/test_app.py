@@ -623,6 +623,8 @@ class AppTests(unittest.TestCase):
         self.assertIn(b"Second category", admin_response.data)
         self.assertIn(b"Mainly built with", admin_response.data)
         self.assertIn(b"Build time", admin_response.data)
+        self.assertIn(b'<details class="admin-project-details">', admin_response.data)
+        self.assertNotIn(b'<details class="admin-project-details" open', admin_response.data)
         self.assertEqual(admin_response.headers["X-Robots-Tag"], "noindex, nofollow")
 
         add_response = self.client.post(
