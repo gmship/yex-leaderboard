@@ -1318,9 +1318,7 @@ def admin_add_project():
         if not name or len(name) > 64:
             raise ValueError("Use a project name up to 64 characters.")
         project_url = canonical_url(str(request.form.get("url", "")))
-        tagline = str(request.form.get("tagline", "")).strip()
-        if len(tagline) > 180:
-            raise ValueError("Description must be 180 characters or fewer.")
+        tagline = name
         primary_category = str(
             request.form.get("category_primary", request.form.get("category", ""))
         ).strip()
@@ -1553,11 +1551,9 @@ def admin_update_project(project_id: int):
                 abort(404)
             if action == "save":
                 name = str(request.form.get("name", "")).strip()
-                tagline = str(request.form.get("tagline", "")).strip()
                 if not name or len(name) > 64:
                     raise ValueError("Use a project name up to 64 characters.")
-                if len(tagline) > 180:
-                    raise ValueError("Description must be 180 characters or fewer.")
+                tagline = name
                 new_url = canonical_url(str(request.form.get("url", "")))
                 primary_category = str(request.form.get("category_primary", "")).strip()
                 secondary_category = str(request.form.get("category_secondary", "")).strip()

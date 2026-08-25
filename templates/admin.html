@@ -11,7 +11,6 @@
       <input type="hidden" name="admin_token" value="{{ add_token }}">
       <label><span>Name</span><input type="text" name="name" maxlength="64" required placeholder="Project name"></label>
       <label class="admin-add-url"><span>URL</span><input type="url" name="url" required placeholder="https://example.com" spellcheck="false"></label>
-      <label class="admin-add-description"><span>Description</span><input type="text" name="tagline" maxlength="180" placeholder="Short description"></label>
       <label><span>Bid ($)</span><input type="number" name="bid_dollars" min="1" max="10000" step="1" value="1" required></label>
       <label><span>Primary category</span><select name="category_primary" required>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
       <label><span>Second category</span><select name="category_secondary"><option value="">None</option>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
@@ -38,7 +37,6 @@
             <div class="admin-edit-grid">
               <label><span>Name</span><input type="text" name="name" maxlength="64" value="{{ project.name|e }}" required></label>
               <label class="admin-edit-url"><span>Original URL</span><input type="url" name="url" value="{{ project.url|e }}" required spellcheck="false" autocomplete="url"></label>
-              <label class="admin-edit-wide"><span>Description</span><input type="text" name="tagline" maxlength="180" value="{{ project.tagline|e }}"></label>
               <label><span>Primary category</span><select name="category_primary" required>{% for category in categories %}<option value="{{ category }}"{% if project.categories and project.categories[0] == category %} selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
               <label><span>Second category</span><select name="category_secondary"><option value="">None</option>{% for category in categories %}<option value="{{ category }}"{% if project.categories|length > 1 and project.categories[1] == category %} selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
               <label><span>Mainly built with</span><select name="built_with" required>{% for tool in tools %}<option value="{{ tool }}"{% if project.main_built_with == tool %} selected{% endif %}>{{ tool }}</option>{% endfor %}</select></label>

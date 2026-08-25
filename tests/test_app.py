@@ -623,6 +623,7 @@ class AppTests(unittest.TestCase):
         self.assertIn(b"Second category", admin_response.data)
         self.assertIn(b"Mainly built with", admin_response.data)
         self.assertIn(b"Build time", admin_response.data)
+        self.assertNotIn(b'name="tagline"', admin_response.data)
         self.assertIn(b'<details class="admin-project-details">', admin_response.data)
         self.assertNotIn(b'<details class="admin-project-details" open', admin_response.data)
         self.assertEqual(admin_response.headers["X-Robots-Tag"], "noindex, nofollow")
@@ -641,8 +642,9 @@ class AppTests(unittest.TestCase):
         self.assertEqual(add_response.status_code, 302)
         with application.db_session() as db:
             added = db.execute(
-                "SELECT category, built_with, total_bid_cents, status FROM projects WHERE slug = 'admin-added'"
+                "SELECT name, tagline, category, built_with, total_bid_cents, status FROM projects WHERE slug = 'admin-added'"
             ).fetchone()
+        self.assertEqual(added["tagline"], added["name"])
         self.assertEqual(json.loads(added["category"]), ["Developer tools"])
         self.assertEqual(json.loads(added["built_with"]), ["Codex"])
         self.assertEqual(added["total_bid_cents"], 700)
@@ -656,7 +658,6 @@ class AppTests(unittest.TestCase):
                 "action": "save",
                 "name": "Admin Test Updated",
                 "url": "https://admin-test.example/new-path?ref=two",
-                "tagline": "An administrator-corrected listing description.",
                 "category_primary": "Apps",
                 "category_secondary": "Developer tools",
                 "built_with": "Claude",
@@ -682,6 +683,7 @@ class AppTests(unittest.TestCase):
             ).fetchone()
         self.assertEqual(project["name"], "Admin Test Updated")
         self.assertEqual(project["url"], "https://admin-test.example/new-path?ref=two")
+        self.assertEqual(project["tagline"], "Admin Test Updated")
         self.assertEqual(json.loads(project["category"]), ["Apps", "Developer tools"])
         self.assertEqual(json.loads(project["built_with"]), ["Claude"])
         self.assertEqual(project["build_time_value"], 2.5)

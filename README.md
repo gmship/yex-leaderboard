@@ -16,7 +16,7 @@ The repository starts with ten fictional `example.com` listings. It contains no 
 - Shareable product detail pages with spend, rank, clicks, build time, visit, and sharing actions.
 - New listings and Top clicks panels with click counts.
 - Direct tracked links or `/go/` redirects with configurable tracking codes.
-- Password-protected link manager with search, pagination, add, full listing edits, two categories, build time, hide, and restore actions.
+- Password-protected link manager with search, pagination, one Name field for name and display text, URL editing, two categories, build time, hide, and restore actions.
 - Stats dashboard for visits, listings, clicks, bids, payments, categories, and tools.
 - Settings for SEO title and description, URL behavior, admin password, categories, and Built with options.
 - SQLite storage and optional Stripe Checkout.

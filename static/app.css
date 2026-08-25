@@ -528,7 +528,6 @@ a { color: inherit; text-decoration: none; }
 .admin-add-form input, .admin-add-form select, .admin-password-panel input { width: 100%; height: 44px; min-width: 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; outline: 0; color: var(--ink); background: #0d0f13; }
 .admin-add-form input:focus, .admin-add-form select:focus, .admin-password-panel input:focus { border-color: rgba(184,255,74,.62); box-shadow: 0 0 0 3px rgba(184,255,74,.1); }
 .admin-add-url { grid-column: span 2; }
-.admin-add-description { grid-column: span 3; }
 .admin-add-built { grid-column: span 2; }
 .admin-add-form .button { min-height: 44px; }
 .admin-search { display: grid; grid-template-columns: minmax(220px, 1fr) 140px auto auto 1fr; align-items: center; gap: 9px; margin-bottom: 14px; }
@@ -719,7 +718,6 @@ a { color: inherit; text-decoration: none; }
   .steps-grid h3 { margin-top: 45px; }
   .admin-add-form { grid-template-columns: 1fr 1fr; }
   .admin-add-url, .admin-add-built { grid-column: auto; }
-  .admin-add-description { grid-column: span 2; }
   .admin-password-panel form { grid-template-columns: 1fr 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .settings-url-form { grid-template-columns: 1fr 1fr; }
@@ -764,7 +762,6 @@ a { color: inherit; text-decoration: none; }
   .highlight-list--clicks li { grid-template-columns: 21px minmax(0, 1fr) auto; column-gap: 6px; }
   .highlight-list li > a { font-size: 11px; }
   .admin-add-form, .admin-password-panel form { grid-template-columns: 1fr; }
-  .admin-add-description { grid-column: auto; }
   .admin-add-form .button, .admin-password-panel .button { width: 100%; }
   .admin-search { grid-template-columns: 1fr 115px; }
   .admin-search .button { width: 100%; }
