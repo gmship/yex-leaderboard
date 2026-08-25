@@ -178,7 +178,32 @@ sudo systemctl status yex-leaderboard --no-pager
 curl http://127.0.0.1:8000/health
 ```
 
-随后在 Nginx 中把域名反向代理到 `http://127.0.0.1:8000`，验证配置后启用 HTTPS。英文部署章节提供了可以直接修改的完整 Nginx 配置。
+创建 `/etc/nginx/sites-available/yex-leaderboard`，把示例域名替换成自己的域名：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.example;
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:8000;
+    }
+}
+```
+
+启用站点并检查 Nginx 配置：
+
+```bash
+sudo ln -s /etc/nginx/sites-available/yex-leaderboard /etc/nginx/sites-enabled/yex-leaderboard
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+最后使用自己的 TLS/HTTPS 方案为域名启用证书，把 `.env` 中的 `BASE_URL` 改为最终的 `https://` 地址，再执行 `sudo systemctl restart yex-leaderboard`。
 
 ### 更新、测试和备份
 
