@@ -8,8 +8,8 @@
   <link rel="canonical" href="{% if active_tool %}{{ request.url_root.rstrip('/') }}{{ url_for('built_with', tool_slug=active_tool.slug) }}{% else %}{{ request.url_root.rstrip('/') }}/{% endif %}">
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
   <script src="{{ url_for('static', filename='theme.js', v='20260825-1') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-23') }}">
-  <script src="{{ url_for('static', filename='app.js', v='20260825-6') }}" defer></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css', v='20260825-26') }}">
+  <script src="{{ url_for('static', filename='app.js', v='20260825-10') }}" defer></script>
 </head>
 <body>
   <div class="page-glow page-glow--one"></div>
@@ -130,13 +130,18 @@
                 <strong>{{ '%g'|format(project.build_time_value) }} {{ {'minutes': 'minute', 'hours': 'hour', 'days': 'day', 'weeks': 'week'}[project.build_time_unit] if project.build_time_value == 1 else project.build_time_unit }}</strong>
                 <span class="meta-divider"></span>
                 <span class="click-count"><strong>{{ project.clicks }}</strong> click{% if project.clicks != 1 %}s{% endif %}</span>
+                <span class="meta-divider"></span>
+                <a class="detail-link" href="{{ url_for('product_detail', project_slug=project.slug) }}">See detail →</a>
               </div>
             </div>
             <div class="bid-cell">
               <span class="bid-amount">${{ '%.0f'|format(project.total_bid_cents / 100) }}</span>
-              <button class="outbid-button js-open-submit"
+              <button class="outbid-button js-open-outbid"
                       type="button"
-                      data-next-bid="{{ (project.total_bid_cents / 100)|int + 1 }}">Outbid ↗</button>
+                      data-project-slug="{{ project.slug|e }}"
+                      data-project-name="{{ project.name|e }}"
+                      data-current-bid-cents="{{ project.total_bid_cents }}"
+                      data-current-rank="{{ project.rank }}">Help bid ↗</button>
             </div>
           </article>
         {% else %}
@@ -181,14 +186,13 @@
           <label class="field"><span>Description <small>editable</small></span><textarea name="tagline" maxlength="180" placeholder="A short description of what your product does" required></textarea></label>
 
           <fieldset class="built-with-card field--wide tool-picker">
-            <legend class="sr-only">Built with</legend>
-            <div class="built-with-heading"><div><span class="built-with-kicker">Most important</span><strong>Built with</strong></div><small>Select the AI tools you used · up to five</small></div>
-            <div>{% for tool in tools %}<label><input type="checkbox" name="built_with" value="{{ tool }}"><span>{{ tool }}</span></label>{% endfor %}</div>
+            <legend class="sr-only">Mainly built with</legend>
+            <div class="built-with-heading"><div><span class="built-with-kicker">Choose one</span><strong>Mainly built with</strong></div><small>Select the main AI tool used to build it</small></div>
+            <div>{% for tool in tools %}<label><input type="radio" name="built_with" value="{{ tool }}" required><span>{{ tool }}</span></label>{% endfor %}</div>
           </fieldset>
 
           <fieldset class="field field--wide tool-picker category-picker"><legend>Cat <small>Choose up to two</small></legend><div>{% for category in categories %}<label><input type="checkbox" name="categories" value="{{ category }}"><span>{{ category }}</span></label>{% endfor %}</div></fieldset>
-          <div class="field field--time"><span>Build time</span><div><input name="build_time_value" type="number" min="0.1" max="10000" step="0.1" placeholder="3" required><select name="build_time_unit" required><option value="hours">hours</option><option value="minutes">minutes</option><option value="days">days</option><option value="weeks">weeks</option></select></div></div>
-          <div class="field submitted-field"><span>Submitted by <small>optional</small></span><div class="submitted-row"><input name="submitted_by" maxlength="40" placeholder="Anonymous"><button class="x-connect-button" id="connect-x" type="button">Connect 𝕏</button></div><small class="field-help" id="x-connect-status">Your X username will appear here after connecting.</small></div>
+          <div class="field field--time field--wide"><span>Build time</span><div><input name="build_time_value" type="number" min="0.1" max="10000" step="0.1" placeholder="3" required><select name="build_time_unit" required><option value="hours">hours</option><option value="minutes">minutes</option><option value="days">days</option><option value="weeks">weeks</option></select></div></div>
           <label class="field honeypot" aria-hidden="true"><span>Company website</span><input name="company_website" tabindex="-1" autocomplete="off"></label>
         </div>
 
@@ -210,5 +214,6 @@
       </form>
     </div>
   </dialog>
+  {% include '_outbid_dialog.html' %}
 </body>
 </html>

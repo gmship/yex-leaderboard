@@ -42,14 +42,14 @@ class AppTests(unittest.TestCase):
         self.assertNotIn(b"Open Source on GitHub", response.data)
         self.assertIn(b"Made with", response.data)
         self.assertIn(b'href="https://yex.lol"', response.data)
-        self.assertIn(b"Submitted by", response.data)
+        self.assertNotIn(b"Submitted by", response.data)
         self.assertIn(b"List for $1", response.data)
         self.assertNotIn(b"Explore the board", response.data)
         self.assertIn(b'class="click-count"', response.data)
         self.assertIn(b'class="project-favicon"', response.data)
         self.assertNotIn(b'href="/go/', response.data)
         self.assertIn(b"utm_source=yex", response.data)
-        self.assertIn(b"data-next-bid=", response.data)
+        self.assertIn(b"data-project-slug=", response.data)
         self.assertNotIn(b"data-project-url=", response.data)
         self.assertIn(b'name="terms_accepted"', response.data)
         self.assertIn(b"All payments are final.", response.data)
@@ -71,7 +71,12 @@ class AppTests(unittest.TestCase):
         self.assertIn(b'/built-with/deepseek#leaderboard', response.data)
         self.assertIn(b'/built-with/grok#leaderboard', response.data)
         self.assertIn(b"visitors since launch", response.data)
-        self.assertIn(b"Connect \xf0\x9d\x95\x8f", response.data)
+        self.assertNotIn(b'name="submitted_by"', response.data)
+        self.assertIn(b"Mainly built with", response.data)
+        self.assertIn(b'type="radio" name="built_with"', response.data)
+        self.assertIn(b"Help bid", response.data)
+        self.assertIn(b"See detail", response.data)
+        self.assertIn(b'id="outbid-dialog"', response.data)
         self.assertIn(b"Choose your bid", response.data)
         self.assertNotIn(b"What did you ship?", response.data)
 
@@ -207,13 +212,19 @@ class AppTests(unittest.TestCase):
                 "SELECT total_bid_cents, favicon_url FROM projects WHERE id = ?",
                 (project_id,),
             ).fetchone()
+            outbid_payload = {
+                "kind": "outbid",
+                "project_id": project_id,
+                "url": payload["url"],
+                "name": payload["name"],
+            }
             db.execute(
                 """
                 INSERT INTO pending_submissions
                     (id, payload_json, amount_cents, status, created_at)
                 VALUES ('add-bid-pending', ?, 100, 'pending', ?)
                 """,
-                (json.dumps(payload), now),
+                (json.dumps(outbid_payload), now),
             )
         self.assertEqual(project["total_bid_cents"], 400)
         self.assertEqual(project["favicon_url"], "https://bid-rules.example/icon.png")
@@ -267,6 +278,139 @@ class AppTests(unittest.TestCase):
         response = self.client.post("/api/checkout", json=payload)
         self.assertEqual(response.status_code, 400)
         self.assertIn("one or two", response.get_json()["error"])
+
+    def test_submission_is_anonymous_and_requires_one_main_tool(self):
+        anonymous = application.validate_submission(
+            {
+                "name": "Anonymous Build",
+                "url": "https://example.org/anonymous",
+                "tagline": "A valid anonymously submitted leaderboard project.",
+                "categories": ["Apps"],
+                "built_with": ["Codex"],
+                "build_time_value": 2,
+                "build_time_unit": "hours",
+                "submitted_by": "@someone",
+                "bid_dollars": 1,
+                "terms_accepted": True,
+            }
+        )
+        self.assertEqual(anonymous["submitted_by"], "Anonymous")
+        self.assertIsNone(anonymous["x_user_id"])
+        self.assertIsNone(anonymous["x_handle"])
+
+        response = self.client.post(
+            "/api/checkout",
+            json={
+                "name": "Too Many Tools",
+                "url": "https://example.org/tools",
+                "tagline": "A valid product that selected more than one main tool.",
+                "categories": ["Apps"],
+                "built_with": ["Codex", "Claude"],
+                "build_time_value": 1,
+                "build_time_unit": "hours",
+                "bid_dollars": 1,
+                "terms_accepted": True,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("one main build tool", response.get_json()["error"])
+
+    def test_existing_listing_uses_bid_only_help_flow(self):
+        now = application.utc_now()
+        with application.db_session() as db:
+            db.execute(
+                """
+                INSERT INTO projects (
+                    slug, name, url, tagline, category, built_with,
+                    build_time_value, build_time_unit, submitted_by,
+                    total_bid_cents, is_demo, status, created_at, updated_at
+                ) VALUES ('share-help-bid-only', 'Share Help Bid', 'https://share-help-bid.example',
+                    'An existing listing whose details stay locked.', '["Apps"]', '["Codex"]',
+                    2, 'hours', 'Anonymous', 400, 0, 'live', ?, ?)
+                """,
+                (now, now),
+            )
+        response = self.client.post(
+            "/api/checkout",
+            json={
+                "name": "Attempted replacement",
+                "url": "https://share-help-bid.example",
+                "tagline": "This must not replace the existing listing details.",
+                "categories": ["Other"],
+                "built_with": ["Claude"],
+                "build_time_value": 99,
+                "build_time_unit": "days",
+                "bid_dollars": 5,
+                "terms_accepted": True,
+            },
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["code"], "existing_listing")
+        self.assertEqual(response.get_json()["slug"], "share-help-bid-only")
+
+    def test_help_bid_checkout_cannot_store_listing_edits(self):
+        now = application.utc_now()
+        with application.db_session() as db:
+            cursor = db.execute(
+                """
+                INSERT INTO projects (
+                    slug, name, url, tagline, category, built_with,
+                    build_time_value, build_time_unit, submitted_by,
+                    total_bid_cents, is_demo, status, created_at, updated_at
+                ) VALUES ('share-help-checkout', 'Locked Share Listing', 'https://share-locked.example',
+                    'The original description stays unchanged.', '["Apps"]', '["Codex"]',
+                    3, 'hours', 'Anonymous', 200, 0, 'live', ?, ?)
+                """,
+                (now, now),
+            )
+            project_id = cursor.lastrowid
+        checkout = type("Checkout", (), {"id": "cs_share_help", "url": "https://checkout.example/help"})()
+        with patch.object(application, "payments_enabled", return_value=True), patch.object(
+            application.stripe.checkout.Session, "create", return_value=checkout
+        ):
+            response = self.client.post(
+                "/api/outbid/share-help-checkout",
+                json={
+                    "bid_dollars": 3,
+                    "terms_accepted": True,
+                    "name": "Attempted rewrite",
+                    "categories": ["Other"],
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        with application.db_session() as db:
+            pending = db.execute(
+                "SELECT payload_json, amount_cents FROM pending_submissions WHERE stripe_session_id = 'cs_share_help'"
+            ).fetchone()
+        stored = json.loads(pending["payload_json"])
+        self.assertEqual(pending["amount_cents"], 300)
+        self.assertEqual(stored["project_id"], project_id)
+        self.assertEqual(stored["kind"], "outbid")
+        self.assertNotIn("categories", stored)
+
+    def test_product_detail_page_has_rank_spend_and_sharing(self):
+        now = application.utc_now()
+        with application.db_session() as db:
+            db.execute(
+                """
+                INSERT INTO projects (
+                    slug, name, url, tagline, category, built_with,
+                    build_time_value, build_time_unit, submitted_by,
+                    total_bid_cents, is_demo, status, created_at, updated_at
+                ) VALUES ('share-detail-build', 'Share Detail Build', 'https://share-detail.example',
+                    'A safe fictional project for testing the detail page.', '["Apps"]', '["Codex"]',
+                    4, 'days', 'Anonymous', 900, 0, 'live', ?, ?)
+                """,
+                (now, now),
+            )
+        response = self.client.get("/product/share-detail-build")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Spent", response.data)
+        self.assertIn(b"Overall rank", response.data)
+        self.assertIn(b"Share this listing", response.data)
+        self.assertIn(b"Help bid +$1", response.data)
+        self.assertIn(b"Made with", response.data)
+        self.assertNotIn(b'name="submitted_by"', response.data)
 
     def test_submission_requires_terms_acceptance(self):
         payload = {
@@ -476,6 +620,9 @@ class AppTests(unittest.TestCase):
         self.assertIn(b"Link manager", admin_response.data)
         self.assertIn(b"Admin Test", admin_response.data)
         self.assertIn(b"utm_source=yex", admin_response.data)
+        self.assertIn(b"Second category", admin_response.data)
+        self.assertIn(b"Mainly built with", admin_response.data)
+        self.assertIn(b"Build time", admin_response.data)
         self.assertEqual(admin_response.headers["X-Robots-Tag"], "noindex, nofollow")
 
         add_response = self.client.post(
@@ -505,7 +652,14 @@ class AppTests(unittest.TestCase):
             data={
                 "admin_token": token,
                 "action": "save",
+                "name": "Admin Test Updated",
                 "url": "https://admin-test.example/new-path?ref=two",
+                "tagline": "An administrator-corrected listing description.",
+                "category_primary": "Apps",
+                "category_secondary": "Developer tools",
+                "built_with": "Claude",
+                "build_time_value": "2.5",
+                "build_time_unit": "days",
             },
         )
         self.assertEqual(save_response.status_code, 302)
@@ -517,9 +671,19 @@ class AppTests(unittest.TestCase):
         self.assertEqual(hide_response.status_code, 302)
         with application.db_session() as db:
             project = db.execute(
-                "SELECT url, status FROM projects WHERE id = ?", (project_id,)
+                """
+                SELECT name, url, tagline, category, built_with,
+                       build_time_value, build_time_unit, status
+                FROM projects WHERE id = ?
+                """,
+                (project_id,),
             ).fetchone()
+        self.assertEqual(project["name"], "Admin Test Updated")
         self.assertEqual(project["url"], "https://admin-test.example/new-path?ref=two")
+        self.assertEqual(json.loads(project["category"]), ["Apps", "Developer tools"])
+        self.assertEqual(json.loads(project["built_with"]), ["Claude"])
+        self.assertEqual(project["build_time_value"], 2.5)
+        self.assertEqual(project["build_time_unit"], "days")
         self.assertEqual(project["status"], "hidden")
 
     def test_admin_rejects_invalid_form_token(self):

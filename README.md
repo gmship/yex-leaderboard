@@ -2,14 +2,21 @@
 
 A small, self-hosted leaderboard for launches, products, tools, or whatever you want to rank.
 
+> **Live example:** [yex.lol](https://yex.lol) — see how a running board looks before installing your own.
+
+> **在线示例：** [yex.lol](https://yex.lol) — 安装前可以先查看实际运行效果。
+
 The repository starts with ten fictional `example.com` listings. It contains no production database, visitor records, payment records, server credentials, or deployment configuration from yex.lol.
 
 ## Features
 
 - Public leaderboard ranked by bid.
+- Anonymous public submissions with exactly one **Mainly built with** tool.
+- Bid-only **Help bid** flow for existing listings; public users cannot rewrite listing details.
+- Shareable product detail pages with spend, rank, clicks, build time, visit, and sharing actions.
 - New listings and Top clicks panels with click counts.
 - Direct tracked links or `/go/` redirects with configurable tracking codes.
-- Password-protected link manager with search, pagination, add, edit, hide, and restore actions.
+- Password-protected link manager with search, pagination, add, full listing edits, two categories, build time, hide, and restore actions.
 - Stats dashboard for visits, listings, clicks, bids, payments, categories, and tools.
 - Settings for SEO title and description, URL behavior, admin password, categories, and Built with options.
 - SQLite storage and optional Stripe Checkout.

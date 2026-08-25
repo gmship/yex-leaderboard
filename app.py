@@ -446,7 +446,6 @@ def validate_submission(data: dict) -> dict:
 
     name = str(data.get("name", "")).strip()
     tagline = str(data.get("tagline", "")).strip()
-    submitted_by = str(data.get("submitted_by", "")).strip() or "Anonymous"
     build_time_unit = str(data.get("build_time_unit", "")).strip()
     terms_accepted = data.get("terms_accepted")
 
@@ -454,8 +453,6 @@ def validate_submission(data: dict) -> dict:
         raise ValueError("Product name must be 2–64 characters.")
     if not 8 <= len(tagline) <= 180:
         raise ValueError("Tagline must be 8–180 characters.")
-    if len(submitted_by) > 40:
-        raise ValueError("Submitted by must be 40 characters or fewer.")
     if build_time_unit not in TIME_UNITS:
         raise ValueError("Choose a valid build-time unit.")
     if terms_accepted not in {True, "true", "1", "on", 1}:
@@ -474,8 +471,8 @@ def validate_submission(data: dict) -> dict:
     if isinstance(built_with, str):
         built_with = [built_with]
     built_with = list(dict.fromkeys(str(item).strip() for item in built_with if str(item).strip()))
-    if not built_with or len(built_with) > 5 or any(item not in managed_tools() for item in built_with):
-        raise ValueError("Choose between one and five build tools.")
+    if len(built_with) != 1 or any(item not in managed_tools() for item in built_with):
+        raise ValueError("Choose one main build tool.")
 
     try:
         build_time_value = float(data.get("build_time_value", 0))
@@ -498,9 +495,26 @@ def validate_submission(data: dict) -> dict:
         "built_with": built_with,
         "build_time_value": build_time_value,
         "build_time_unit": build_time_unit,
-        "submitted_by": submitted_by,
+        "submitted_by": "Anonymous",
+        "x_user_id": None,
+        "x_handle": None,
         "amount_cents": amount_cents,
     }
+
+
+def validate_outbid(data: dict) -> int:
+    if data.get("company_website"):
+        raise ValueError("Unable to accept this bid.")
+    if data.get("terms_accepted") not in {True, "true", "1", "on", 1}:
+        raise ValueError("Accept the Rules, Terms, and Privacy Policy to continue.")
+    try:
+        bid_dollars = int(data.get("bid_dollars", 0))
+    except (TypeError, ValueError):
+        raise ValueError("Enter a whole-dollar bid.") from None
+    amount_cents = bid_dollars * 100
+    if amount_cents < MIN_SUBMISSION_CENTS or amount_cents > 1_000_000:
+        raise ValueError("Bid must be between $1 and $10,000.")
+    return amount_cents
 
 
 def payments_enabled() -> bool:
@@ -712,9 +726,9 @@ def render_admin(*, error: str = "", status_code: int = 200):
         conditions.append("status = ?")
         parameters.append(listing_status)
     if search:
-        conditions.append("(name LIKE ? OR url LIKE ? OR slug LIKE ? OR submitted_by LIKE ?)")
+        conditions.append("(name LIKE ? OR url LIKE ? OR slug LIKE ?)")
         search_term = f"%{search}%"
-        parameters.extend([search_term] * 4)
+        parameters.extend([search_term] * 3)
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     per_page = 20
     with db_session() as db:
@@ -725,8 +739,9 @@ def render_admin(*, error: str = "", status_code: int = 200):
         current_page = min(current_page, total_pages)
         rows = db.execute(
             f"""
-            SELECT id, slug, name, url, status, is_demo, total_bid_cents,
-                   clicks, submitted_by, created_at, updated_at
+            SELECT id, slug, name, url, tagline, category, built_with,
+                   build_time_value, build_time_unit, status, is_demo,
+                   total_bid_cents, clicks, created_at, updated_at
             FROM projects
             {where_clause}
             ORDER BY status = 'live' DESC, is_demo ASC,
@@ -738,6 +753,20 @@ def render_admin(*, error: str = "", status_code: int = 200):
     projects = []
     for row in rows:
         project = dict(row)
+        try:
+            categories = json.loads(project["category"])
+        except (json.JSONDecodeError, TypeError):
+            categories = [project["category"]]
+        if isinstance(categories, str):
+            categories = [categories]
+        try:
+            built_with = json.loads(project["built_with"])
+        except (json.JSONDecodeError, TypeError):
+            built_with = [project["built_with"]]
+        if isinstance(built_with, str):
+            built_with = [built_with]
+        project["categories"] = categories[:2]
+        project["main_built_with"] = built_with[0] if built_with else ""
         project["admin_token"] = admin_form_token(project["id"])
         projects.append(project)
     return admin_response(
@@ -860,9 +889,16 @@ def fulfill_checkout(session) -> int | None:
             return None
         payload = json.loads(pending["payload_json"])
         amount_cents = int(session.get("amount_total") or pending["amount_cents"])
-        project = db.execute(
-            "SELECT id FROM projects WHERE url = ? AND status = 'live'", (payload["url"],)
-        ).fetchone()
+        project = None
+        if payload.get("kind") == "outbid" and payload.get("project_id"):
+            project = db.execute(
+                "SELECT id FROM projects WHERE id = ?", (int(payload["project_id"]),)
+            ).fetchone()
+        elif payload.get("url"):
+            project = db.execute(
+                "SELECT id FROM projects WHERE url = ? AND status = 'live'",
+                (payload["url"],),
+            ).fetchone()
         now = utc_now()
         if project:
             project_id = int(project["id"])
@@ -877,6 +913,8 @@ def fulfill_checkout(session) -> int | None:
                 (amount_cents, payload.get("favicon_url"), now, project_id),
             )
         else:
+            if payload.get("kind") == "outbid":
+                return None
             cursor = db.execute(
                 """
                 INSERT INTO projects (
@@ -897,7 +935,7 @@ def fulfill_checkout(session) -> int | None:
                     json.dumps(payload["built_with"]),
                     payload["build_time_value"],
                     payload["build_time_unit"],
-                    payload["submitted_by"],
+                    "Anonymous",
                     payload.get("favicon_url"),
                     amount_cents,
                     now,
@@ -977,6 +1015,14 @@ def listing_highlights() -> tuple[list[dict], list[dict]]:
             """
         ).fetchall()
     return [dict(row) for row in newest], [dict(row) for row in top_clicks]
+
+
+def project_detail_snapshot(project_slug: str) -> tuple[dict, int] | None:
+    projects = project_rows()
+    project = next((item for item in projects if item["slug"] == project_slug), None)
+    if not project:
+        return None
+    return project, len(projects)
 
 
 def admin_stats_snapshot() -> dict:
@@ -1145,6 +1191,37 @@ def built_with(tool_slug: str):
     return render_leaderboard(tool)
 
 
+@app.get("/product/<project_slug>")
+def product_detail(project_slug: str):
+    snapshot = project_detail_snapshot(project_slug)
+    if not snapshot:
+        abort(404)
+    project, total_projects = snapshot
+    traffic = traffic_snapshot(record_visit=True)
+    tool_links = {tool["name"]: tool["slug"] for tool in managed_tool_definitions()}
+    detail_url = f"{BASE_URL}{url_for('product_detail', project_slug=project['slug'])}"
+    share_text = f"{project['name']} is #{project['rank']} on the {SITE_NAME} leaderboard."
+    return render_template(
+        "product.html",
+        project=project,
+        total_projects=total_projects,
+        min_bid=MIN_SUBMISSION_CENTS // 100,
+        payments_ready=payments_enabled(),
+        online_count=traffic["online"],
+        total_visits=traffic["total_visits"],
+        outbound_mode=outbound_preferences()["mode"],
+        detail_url=detail_url,
+        share_text=share_text,
+        tool_links=tool_links,
+        x_share_url="https://x.com/intent/post?" + urlencode(
+            {"text": share_text, "url": detail_url}
+        ),
+        linkedin_share_url="https://www.linkedin.com/sharing/share-offsite/?" + urlencode(
+            {"url": detail_url}
+        ),
+    )
+
+
 @app.get("/rules")
 def rules():
     return render_template("legal.html", document="rules")
@@ -1241,18 +1318,31 @@ def admin_add_project():
         if not name or len(name) > 64:
             raise ValueError("Use a project name up to 64 characters.")
         project_url = canonical_url(str(request.form.get("url", "")))
-        category = str(request.form.get("category", ""))
-        if category not in managed_categories():
-            raise ValueError("Choose a valid category.")
+        tagline = str(request.form.get("tagline", "")).strip()
+        if len(tagline) > 180:
+            raise ValueError("Description must be 180 characters or fewer.")
+        primary_category = str(
+            request.form.get("category_primary", request.form.get("category", ""))
+        ).strip()
+        secondary_category = str(request.form.get("category_secondary", "")).strip()
+        categories = [primary_category]
+        if secondary_category and secondary_category != primary_category:
+            categories.append(secondary_category)
+        if not primary_category or any(item not in managed_categories() for item in categories):
+            raise ValueError("Choose one or two valid categories.")
         built_with = str(request.form.get("built_with", ""))
         if built_with not in managed_tools():
-            raise ValueError("Choose a valid AI tool.")
+            raise ValueError("Choose one valid main build tool.")
         try:
             bid_dollars = int(str(request.form.get("bid_dollars", "")))
+            build_time_value = float(str(request.form.get("build_time_value", "1")))
         except ValueError:
-            raise ValueError("Enter a whole-dollar bid.") from None
+            raise ValueError("Enter valid bid and build-time numbers.") from None
         if not 1 <= bid_dollars <= 10000:
             raise ValueError("Bid must be between $1 and $10,000.")
+        build_time_unit = str(request.form.get("build_time_unit", "hours"))
+        if not 0 < build_time_value <= 10000 or build_time_unit not in TIME_UNITS:
+            raise ValueError("Choose a valid build time.")
 
         now = utc_now()
         with db_session() as db:
@@ -1263,14 +1353,17 @@ def admin_add_project():
                     slug, name, url, tagline, category, built_with,
                     build_time_value, build_time_unit, submitted_by, favicon_url,
                     total_bid_cents, is_demo, status, created_at, updated_at
-                ) VALUES (?, ?, ?, '', ?, ?, 1, 'hours', 'Admin', ?, ?, 0, 'live', ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Anonymous', ?, ?, 0, 'live', ?, ?)
                 """,
                 (
                     slug,
                     name,
                     project_url,
-                    json.dumps([category]),
+                    tagline,
+                    json.dumps(categories),
                     json.dumps([built_with]),
+                    build_time_value,
+                    build_time_unit,
                     submission_favicon_url("", project_url),
                     bid_dollars * 100,
                     now,
@@ -1454,15 +1547,60 @@ def admin_update_project(project_id: int):
     try:
         with db_session() as db:
             project = db.execute(
-                "SELECT id FROM projects WHERE id = ?", (project_id,)
+                "SELECT id, url FROM projects WHERE id = ?", (project_id,)
             ).fetchone()
             if not project:
                 abort(404)
             if action == "save":
+                name = str(request.form.get("name", "")).strip()
+                tagline = str(request.form.get("tagline", "")).strip()
+                if not name or len(name) > 64:
+                    raise ValueError("Use a project name up to 64 characters.")
+                if len(tagline) > 180:
+                    raise ValueError("Description must be 180 characters or fewer.")
                 new_url = canonical_url(str(request.form.get("url", "")))
+                primary_category = str(request.form.get("category_primary", "")).strip()
+                secondary_category = str(request.form.get("category_secondary", "")).strip()
+                categories = [primary_category]
+                if secondary_category and secondary_category != primary_category:
+                    categories.append(secondary_category)
+                if not primary_category or any(item not in managed_categories() for item in categories):
+                    raise ValueError("Choose one or two valid categories.")
+                built_with = str(request.form.get("built_with", "")).strip()
+                if built_with not in managed_tools():
+                    raise ValueError("Choose one valid main build tool.")
+                try:
+                    build_time_value = float(str(request.form.get("build_time_value", "")))
+                except ValueError:
+                    raise ValueError("Enter a valid build time.") from None
+                build_time_unit = str(request.form.get("build_time_unit", ""))
+                if not 0 < build_time_value <= 10000 or build_time_unit not in TIME_UNITS:
+                    raise ValueError("Choose a valid build time.")
+                favicon_url = (
+                    submission_favicon_url("", new_url)
+                    if new_url != project["url"]
+                    else None
+                )
                 db.execute(
-                    "UPDATE projects SET url = ?, updated_at = ? WHERE id = ?",
-                    (new_url, utc_now(), project_id),
+                    """
+                    UPDATE projects
+                    SET name = ?, url = ?, tagline = ?, category = ?, built_with = ?,
+                        build_time_value = ?, build_time_unit = ?,
+                        favicon_url = COALESCE(?, favicon_url), updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        name,
+                        new_url,
+                        tagline,
+                        json.dumps(categories),
+                        json.dumps([built_with]),
+                        build_time_value,
+                        build_time_unit,
+                        favicon_url,
+                        utc_now(),
+                        project_id,
+                    ),
                 )
             elif action in {"hide", "show"}:
                 status = "hidden" if action == "hide" else "live"
@@ -1484,6 +1622,13 @@ def admin_update_project(project_id: int):
 
 @app.get("/sitemap.xml")
 def sitemap():
+    with db_session() as db:
+        product_slugs = [
+            row["slug"]
+            for row in db.execute(
+                "SELECT slug FROM projects WHERE status = 'live' ORDER BY id"
+            ).fetchall()
+        ]
     urls = [
         f"{BASE_URL}/",
         f"{BASE_URL}/rules",
@@ -1491,6 +1636,8 @@ def sitemap():
         f"{BASE_URL}/privacy",
     ] + [
         f"{BASE_URL}/built-with/{tool['slug']}" for tool in managed_tool_definitions()
+    ] + [
+        f"{BASE_URL}/product/{slug}" for slug in product_slugs
     ]
     body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
     body += "\n".join(f"  <url><loc>{url}</loc></url>" for url in urls)
@@ -1523,10 +1670,12 @@ def site_preview():
         return jsonify(error="We couldn't read that site. You can still enter the details manually."), 422
     with db_session() as db:
         existing = db.execute(
-            "SELECT total_bid_cents FROM projects WHERE url = ? AND status = 'live'",
+            "SELECT slug, name, total_bid_cents FROM projects WHERE url = ? AND status = 'live'",
             (product_url,),
         ).fetchone()
     details["existing_bid_cents"] = int(existing["total_bid_cents"]) if existing else 0
+    details["existing_slug"] = existing["slug"] if existing else ""
+    details["existing_name"] = existing["name"] if existing else ""
     return jsonify(details)
 
 
@@ -1536,6 +1685,17 @@ def create_checkout():
         submission = validate_submission(request.get_json(silent=True) or {})
     except ValueError as error:
         return jsonify(error=str(error)), 400
+    with db_session() as db:
+        existing = db.execute(
+            "SELECT slug FROM projects WHERE url = ? AND status = 'live'",
+            (submission["url"],),
+        ).fetchone()
+    if existing:
+        return jsonify(
+            error="This website is already listed. Use Help bid on its listing instead.",
+            code="existing_listing",
+            slug=existing["slug"],
+        ), 409
     if not payments_enabled():
         return jsonify(
             error="Stripe Checkout is not connected yet. The submission form is ready for keys.",
@@ -1547,10 +1707,6 @@ def create_checkout():
     try:
         with db_session() as db:
             enforce_rate_limit(db)
-            existing = db.execute(
-                "SELECT total_bid_cents FROM projects WHERE url = ? AND status = 'live'",
-                (submission["url"],),
-            ).fetchone()
             db.execute(
                 """
                 INSERT INTO pending_submissions
@@ -1567,23 +1723,15 @@ def create_checkout():
                         "currency": "usd",
                         "unit_amount": submission["amount_cents"],
                         "product_data": {
-                            "name": (
-                                f"Add to {submission['name']}'s bid on {SITE_NAME}"
-                                if existing
-                                else f"List {submission['name']} on {SITE_NAME}"
-                            ),
-                            "description": (
-                                f"Adds ${submission['amount_cents'] // 100} to the existing leaderboard bid."
-                                if existing
-                                else "One-time anti-spam submission and full leaderboard bid."
-                            ),
+                            "name": f"List {submission['name']} on {SITE_NAME}",
+                            "description": "One-time anti-spam submission and full leaderboard bid.",
                         },
                     },
                     "quantity": 1,
                 }
             ],
             client_reference_id=pending_id,
-            metadata={"pending_id": pending_id, "kind": "leaderboard_submission"},
+            metadata={"pending_id": pending_id, "kind": "new_listing"},
             payment_intent_data={"metadata": {"pending_id": pending_id}},
             success_url=f"{BASE_URL}/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{BASE_URL}/?checkout=cancelled#leaderboard",
@@ -1598,6 +1746,81 @@ def create_checkout():
         return jsonify(error=str(error)), 429
     except Exception:
         app.logger.exception("Unable to create Stripe Checkout Session")
+        return jsonify(error="Checkout could not be started. Please try again."), 502
+
+
+@app.post("/api/outbid/<project_slug>")
+def create_outbid_checkout(project_slug: str):
+    data = request.get_json(silent=True) or {}
+    try:
+        amount_cents = validate_outbid(data)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    if not payments_enabled():
+        return jsonify(
+            error="Stripe Checkout is not connected yet.", code="payments_unavailable"
+        ), 503
+
+    with db_session() as db:
+        project = db.execute(
+            "SELECT id, slug, name, url, total_bid_cents FROM projects WHERE slug = ? AND status = 'live'",
+            (project_slug,),
+        ).fetchone()
+    if not project:
+        return jsonify(error="This listing is no longer available."), 404
+
+    pending_id = uuid.uuid4().hex
+    payload = {
+        "kind": "outbid",
+        "project_id": int(project["id"]),
+        "url": project["url"],
+        "name": project["name"],
+    }
+    try:
+        with db_session() as db:
+            enforce_rate_limit(db)
+            db.execute(
+                """
+                INSERT INTO pending_submissions
+                    (id, payload_json, amount_cents, status, created_at)
+                VALUES (?, ?, ?, 'pending', ?)
+                """,
+                (pending_id, json.dumps(payload), amount_cents, utc_now()),
+            )
+        checkout = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "unit_amount": amount_cents,
+                        "product_data": {
+                            "name": f"Help bid for {project['name']} on {SITE_NAME}",
+                            "description": (
+                                f"Adds ${amount_cents // 100} to its leaderboard bid, "
+                                f"for a ${int(project['total_bid_cents']) // 100 + amount_cents // 100} total."
+                            ),
+                        },
+                    },
+                    "quantity": 1,
+                }
+            ],
+            client_reference_id=pending_id,
+            metadata={"pending_id": pending_id, "kind": "outbid"},
+            payment_intent_data={"metadata": {"pending_id": pending_id}},
+            success_url=f"{BASE_URL}/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{BASE_URL}/product/{project['slug']}?checkout=cancelled",
+        )
+        with db_session() as db:
+            db.execute(
+                "UPDATE pending_submissions SET stripe_session_id = ? WHERE id = ?",
+                (checkout.id, pending_id),
+            )
+        return jsonify(url=checkout.url)
+    except ValueError as error:
+        return jsonify(error=str(error)), 429
+    except Exception:
+        app.logger.exception("Unable to create Help bid Checkout Session")
         return jsonify(error="Checkout could not be started. Please try again."), 502
 
 

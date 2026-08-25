@@ -11,14 +11,18 @@
       <input type="hidden" name="admin_token" value="{{ add_token }}">
       <label><span>Name</span><input type="text" name="name" maxlength="64" required placeholder="Project name"></label>
       <label class="admin-add-url"><span>URL</span><input type="url" name="url" required placeholder="https://example.com" spellcheck="false"></label>
+      <label class="admin-add-description"><span>Description</span><input type="text" name="tagline" maxlength="180" placeholder="Short description"></label>
       <label><span>Bid ($)</span><input type="number" name="bid_dollars" min="1" max="10000" step="1" value="1" required></label>
-      <label><span>Cat</span><select name="category" required>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
-      <label class="admin-add-built"><span>Built with</span><select name="built_with" required>{% for tool in tools %}<option value="{{ tool }}">{{ tool }}</option>{% endfor %}</select></label>
+      <label><span>Primary category</span><select name="category_primary" required>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
+      <label><span>Second category</span><select name="category_secondary"><option value="">None</option>{% for category in categories %}<option value="{{ category }}">{{ category }}</option>{% endfor %}</select></label>
+      <label class="admin-add-built"><span>Mainly built with</span><select name="built_with" required>{% for tool in tools %}<option value="{{ tool }}">{{ tool }}</option>{% endfor %}</select></label>
+      <label><span>Build time</span><input type="number" name="build_time_value" min="0.1" max="10000" step="0.1" value="1" required></label>
+      <label><span>Unit</span><select name="build_time_unit" required><option value="minutes">minutes</option><option value="hours" selected>hours</option><option value="days">days</option><option value="weeks">weeks</option></select></label>
       <button class="button button--primary" type="submit">Add link</button>
     </form>
   </section>
   <form class="admin-search" method="get" action="{{ url_for('admin_dashboard') }}">
-    <label><span class="sr-only">Search listings</span><input type="search" name="q" value="{{ search|e }}" placeholder="Search name, URL, slug, submitter…"></label>
+    <label><span class="sr-only">Search listings</span><input type="search" name="q" value="{{ search|e }}" placeholder="Search name, URL, or slug…"></label>
     <label><span class="sr-only">Listing status</span><select name="status"><option value="all"{% if listing_status == 'all' %} selected{% endif %}>All status</option><option value="live"{% if listing_status == 'live' %} selected{% endif %}>Live</option><option value="hidden"{% if listing_status == 'hidden' %} selected{% endif %}>Hidden</option></select></label>
     <button class="button button--small button--primary" type="submit">Search</button>
     {% if search or listing_status != 'all' %}<a class="admin-clear-search" href="{{ url_for('admin_dashboard') }}">Clear</a>{% endif %}
@@ -28,10 +32,18 @@
     {% for project in projects %}
       <form class="admin-project" method="post" action="{{ url_for('admin_update_project', project_id=project.id) }}">
         <input type="hidden" name="admin_token" value="{{ project.admin_token }}">
-        <div class="admin-project-head"><div><div class="admin-name-line"><h2>{{ project.name }}</h2><span class="admin-status admin-status--{{ project.status }}">{{ project.status }}</span>{% if project.is_demo %}<span class="demo-label">Demo</span>{% endif %}</div><p>${{ '%.0f'|format(project.total_bid_cents / 100) }} bid · {{ project.clicks }} clicks · {{ project.submitted_by }}</p></div><a class="admin-open-link" href="{{ project|listing_url|e }}" target="_blank" rel="noreferrer">Open ↗</a></div>
-        <label class="admin-url-field"><span>Original URL</span><input type="url" name="url" value="{{ project.url|e }}" required spellcheck="false" autocomplete="url"></label>
+        <div class="admin-project-head"><div><div class="admin-name-line"><h2>{{ project.name }}</h2><span class="admin-status admin-status--{{ project.status }}">{{ project.status }}</span>{% if project.is_demo %}<span class="demo-label">Demo</span>{% endif %}</div><p>${{ '%.0f'|format(project.total_bid_cents / 100) }} bid · {{ project.clicks }} clicks</p></div><a class="admin-open-link" href="{{ project|listing_url|e }}" target="_blank" rel="noreferrer">Open ↗</a></div>
+        <div class="admin-edit-grid">
+          <label><span>Name</span><input type="text" name="name" maxlength="64" value="{{ project.name|e }}" required></label>
+          <label class="admin-edit-url"><span>Original URL</span><input type="url" name="url" value="{{ project.url|e }}" required spellcheck="false" autocomplete="url"></label>
+          <label class="admin-edit-wide"><span>Description</span><input type="text" name="tagline" maxlength="180" value="{{ project.tagline|e }}"></label>
+          <label><span>Primary category</span><select name="category_primary" required>{% for category in categories %}<option value="{{ category }}"{% if project.categories and project.categories[0] == category %} selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
+          <label><span>Second category</span><select name="category_secondary"><option value="">None</option>{% for category in categories %}<option value="{{ category }}"{% if project.categories|length > 1 and project.categories[1] == category %} selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
+          <label><span>Mainly built with</span><select name="built_with" required>{% for tool in tools %}<option value="{{ tool }}"{% if project.main_built_with == tool %} selected{% endif %}>{{ tool }}</option>{% endfor %}</select></label>
+          <label><span>Build time</span><span class="admin-time-fields"><input type="number" name="build_time_value" min="0.1" max="10000" step="0.1" value="{{ '%g'|format(project.build_time_value) }}" required><select name="build_time_unit" required>{% for unit in ['minutes', 'hours', 'days', 'weeks'] %}<option value="{{ unit }}"{% if project.build_time_unit == unit %} selected{% endif %}>{{ unit }}</option>{% endfor %}</select></span></label>
+        </div>
         <p class="admin-tracked-url"><span>Public link</span><code>{{ project|listing_url }}</code></p>
-        <div class="admin-project-actions"><button class="button button--small button--primary" type="submit" name="action" value="save">Save URL</button>{% if project.status == 'live' %}<button class="button button--small button--danger" type="submit" name="action" value="hide">Hide listing</button>{% else %}<button class="button button--small button--ghost" type="submit" name="action" value="show">Restore listing</button>{% endif %}</div>
+        <div class="admin-project-actions"><button class="button button--small button--primary" type="submit" name="action" value="save">Save listing</button>{% if project.status == 'live' %}<button class="button button--small button--danger" type="submit" name="action" value="hide">Hide listing</button>{% else %}<button class="button button--small button--ghost" type="submit" name="action" value="show">Restore listing</button>{% endif %}</div>
       </form>
     {% else %}<div class="admin-empty"><strong>No matching listings</strong><span>Try another search or status.</span></div>{% endfor %}
   </section>

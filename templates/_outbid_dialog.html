@@ -1,0 +1,28 @@
+<dialog class="submit-dialog outbid-dialog" id="outbid-dialog">
+  <div class="dialog-shell outbid-dialog-shell">
+    <div class="dialog-header">
+      <div><p class="eyebrow">Support this listing</p><h2>Help bid</h2></div>
+      <button class="dialog-close" id="outbid-dialog-close" type="button" aria-label="Close Help bid form">×</button>
+    </div>
+    <form id="outbid-form" autocomplete="off" novalidate>
+      <input name="company_website" class="honeypot" tabindex="-1" autocomplete="off">
+      <section class="outbid-project-card">
+        <span>Adding to</span>
+        <strong id="outbid-project-name">This listing</strong>
+        <small id="outbid-current-position">Current bid</small>
+      </section>
+      <section class="bid-card" aria-labelledby="outbid-bid-title">
+        <div class="bid-card-heading"><div><span class="built-with-kicker">Your contribution</span><h3 id="outbid-bid-title">Add to its bid</h3></div><span class="one-time-label">One-time payment</span></div>
+        <div class="bid-main">
+          <label class="bid-input"><span>$</span><input name="bid_dollars" id="outbid-dollars" type="number" min="{{ min_bid }}" max="10000" step="1" value="{{ min_bid }}" data-base-min="{{ min_bid }}" autocomplete="off" aria-label="Additional bid amount in dollars" required></label>
+          <div class="quick-bids" id="outbid-quick-bids" aria-label="Quick additional bid amounts">{% for amount in [1, 3, 5, 10, 25] %}<button type="button" data-outbid-amount="{{ amount }}">+${{ amount }}</button>{% endfor %}</div>
+        </div>
+        <div class="bid-result"><strong id="outbid-result">New total</strong><span>Helping the bid only changes its ranking. Listing details stay locked.</span></div>
+      </section>
+      <p class="form-error" id="outbid-error" role="alert" hidden></p>
+      <div class="purchase-notice" role="note"><strong>Bid only.</strong><span>You cannot change the URL, title, description, categories, tools, or other listing details. Contact the administrator for corrections.</span></div>
+      <label class="terms-check"><input type="checkbox" name="terms_accepted" required><span>I agree to the <a href="{{ url_for('rules') }}" target="_blank" rel="noreferrer">Rules</a>, <a href="{{ url_for('terms') }}" target="_blank" rel="noreferrer">Terms</a>, and <a href="{{ url_for('privacy') }}" target="_blank" rel="noreferrer">Privacy Policy</a>.</span></label>
+      <button class="button button--primary button--wide" id="outbid-checkout-button" type="submit" {% if not payments_ready %}data-payments-pending="true"{% endif %}>{% if payments_ready %}Continue to Stripe ↗{% else %}Stripe setup pending{% endif %}</button>
+    </form>
+  </div>
+</dialog>

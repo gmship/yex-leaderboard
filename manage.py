@@ -17,7 +17,7 @@ def list_projects() -> None:
     with db_session() as db:
         rows = db.execute(
             """
-            SELECT slug, name, status, is_demo, total_bid_cents, clicks, submitted_by, created_at
+            SELECT slug, name, status, is_demo, total_bid_cents, clicks, created_at
             FROM projects ORDER BY is_demo ASC, total_bid_cents DESC
             """
         ).fetchall()
@@ -29,7 +29,7 @@ def list_projects() -> None:
         print(
             f"{row['slug']:<28} {row['status']:<7} {kind:<5} "
             f"${row['total_bid_cents'] / 100:>7.2f} {row['clicks']:>5} clicks  "
-            f"{row['name']} — submitted by {row['submitted_by']}"
+            f"{row['name']}"
         )
 
 
