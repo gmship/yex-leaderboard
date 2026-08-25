@@ -25,6 +25,188 @@ Choose one installation method:
 
 Git is needed only when cloning or updating the repository.
 
+## 中文安装说明
+
+下面任选一种方式安装。首次安装建议使用 Docker；如果服务器已经配置好 Python，也可以直接运行。
+
+### 使用 Docker 安装（推荐）
+
+Linux 或 macOS：
+
+```bash
+git clone https://github.com/gmship/yex-leaderboard.git
+cd yex-leaderboard
+cp .env.example .env
+docker compose up -d --build
+```
+
+Windows PowerShell：
+
+```powershell
+git clone https://github.com/gmship/yex-leaderboard.git
+Set-Location yex-leaderboard
+Copy-Item .env.example .env
+docker compose up -d --build
+```
+
+启动后访问 `http://127.0.0.1:5000`，后台地址为 `http://127.0.0.1:5000/admin`。Docker 数据保存在项目目录的 `data` 文件夹中。
+
+常用命令：
+
+```bash
+docker compose logs -f leaderboard
+docker compose restart leaderboard
+docker compose down
+docker compose up -d --build
+```
+
+`docker compose down` 不会删除 `data` 目录。除非确定要删除数据，否则不要使用 `docker compose down -v`。
+
+### 使用 Python 安装
+
+macOS 或 Linux：
+
+```bash
+git clone https://github.com/gmship/yex-leaderboard.git
+cd yex-leaderboard
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+cp .env.example .env
+python app.py
+```
+
+Windows PowerShell：
+
+```powershell
+git clone https://github.com/gmship/yex-leaderboard.git
+Set-Location yex-leaderboard
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+Copy-Item .env.example .env
+python app.py
+```
+
+如果 PowerShell 禁止激活虚拟环境，可先在当前窗口执行：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+### 首次登录和必要设置
+
+- 后台地址：`http://127.0.0.1:5000/admin`
+- 默认用户名：`admin`
+- 默认密码：`admin`
+
+上线前请立即进入 **Admin → Settings → Administrator password** 修改管理员密码，并在 `.env` 中设置新的 `FLASK_SECRET_KEY`。Settings 页面还可以修改 SEO 标题与描述、链接跳转方式、跟踪参数、分类以及 Built with 选项。
+
+应用会自动读取项目根目录的 `.env`。至少建议检查以下配置：
+
+```dotenv
+SITE_NAME=Whatever Board
+BASE_URL=https://your-domain.example
+HOST=127.0.0.1
+PORT=5000
+DATABASE_PATH=./data/leaderboard.db
+FLASK_SECRET_KEY=replace-with-a-long-random-secret
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=replace-this-password
+SEED_DEMO_DATA=1
+```
+
+可以使用下面的命令生成随机密钥：
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+如果需要一个完全空白的排行榜，请在**首次启动前**设置 `SEED_DEMO_DATA=0`。不要把 `.env`、数据库、Stripe 密钥或真实密码提交到 Git。
+
+### Ubuntu/Debian 生产环境部署
+
+以下示例使用 Gunicorn、systemd 和 Nginx，假设代码目录为 `/srv/yex-leaderboard`：
+
+```bash
+sudo apt update
+sudo apt install -y git nginx python3 python3-venv
+sudo useradd --system --create-home --shell /usr/sbin/nologin yexboard
+sudo git clone https://github.com/gmship/yex-leaderboard.git /srv/yex-leaderboard
+sudo chown -R yexboard:yexboard /srv/yex-leaderboard
+sudo -u yexboard python3 -m venv /srv/yex-leaderboard/.venv
+sudo -u yexboard /srv/yex-leaderboard/.venv/bin/pip install -r /srv/yex-leaderboard/requirements.txt
+sudo -u yexboard cp /srv/yex-leaderboard/.env.example /srv/yex-leaderboard/.env
+```
+
+编辑 `/srv/yex-leaderboard/.env`，正确填写域名、管理员密码和随机密钥，然后限制文件权限：
+
+```bash
+sudo chown yexboard:yexboard /srv/yex-leaderboard/.env
+sudo chmod 600 /srv/yex-leaderboard/.env
+```
+
+创建 `/etc/systemd/system/yex-leaderboard.service`：
+
+```ini
+[Unit]
+Description=Yex Leaderboard
+After=network.target
+
+[Service]
+Type=simple
+User=yexboard
+Group=yexboard
+WorkingDirectory=/srv/yex-leaderboard
+EnvironmentFile=/srv/yex-leaderboard/.env
+ExecStart=/srv/yex-leaderboard/.venv/bin/gunicorn --workers 2 --threads 2 --timeout 30 --bind 127.0.0.1:8000 app:app
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启动服务：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now yex-leaderboard
+sudo systemctl status yex-leaderboard --no-pager
+curl http://127.0.0.1:8000/health
+```
+
+随后在 Nginx 中把域名反向代理到 `http://127.0.0.1:8000`，验证配置后启用 HTTPS。英文部署章节提供了可以直接修改的完整 Nginx 配置。
+
+### 更新、测试和备份
+
+更新 Python/systemd 部署：
+
+```bash
+cd /srv/yex-leaderboard
+sudo -u yexboard git pull --ff-only
+sudo -u yexboard .venv/bin/pip install -r requirements.txt
+sudo systemctl restart yex-leaderboard
+```
+
+更新 Docker 部署：
+
+```bash
+git pull --ff-only
+docker compose up -d --build
+docker compose logs --tail=100 leaderboard
+```
+
+运行测试：
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+数据库默认位于 `data/leaderboard.db`。升级前请先停止写入并备份该文件；恢复时先停止应用，保留当前数据库副本，再用备份文件替换并重启服务。
+
 ## Install with Docker
 
 ```bash
