@@ -1,5 +1,7 @@
 # Yex Leaderboard
 
+![Yex Leaderboard — self-hosted, open-source, pay-to-rank leaderboard](docs/assets/yex-leaderboard-cover.jpg)
+
 A small, self-hosted leaderboard for launches, products, tools, or whatever you want to rank.
 
 > **Live example:** [yex.lol](https://yex.lol) — see how a running board looks before installing your own.
@@ -44,6 +46,7 @@ Linux 或 macOS：
 git clone https://github.com/gmship/yex-leaderboard.git
 cd yex-leaderboard
 cp .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 docker compose up -d --build
 ```
 
@@ -53,10 +56,11 @@ Windows PowerShell：
 git clone https://github.com/gmship/yex-leaderboard.git
 Set-Location yex-leaderboard
 Copy-Item .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 docker compose up -d --build
 ```
 
-启动后访问 `http://127.0.0.1:5000`，后台地址为 `http://127.0.0.1:5000/admin`。Docker 数据保存在项目目录的 `data` 文件夹中。
+启动后访问 `http://127.0.0.1:5000`，后台地址为 `http://127.0.0.1:5000/admin`。端口默认只绑定到本机，Docker 数据保存在名为 `leaderboard-data` 的卷中。
 
 常用命令：
 
@@ -67,7 +71,9 @@ docker compose down
 docker compose up -d --build
 ```
 
-`docker compose down` 不会删除 `data` 目录。除非确定要删除数据，否则不要使用 `docker compose down -v`。
+`docker compose down` 不会删除数据卷。除非确定要删除数据，否则不要使用 `docker compose down -v`。
+
+从早期使用 `./data` 绑定目录的版本升级时，请先备份 `data/leaderboard.db`。新版本首次启动并创建 `leaderboard-data` 卷后，停止服务，再用 `docker compose cp ./data/leaderboard.db leaderboard:/data/leaderboard.db` 导入旧数据库并重新启动。
 
 ### 使用 Python 安装
 
@@ -81,6 +87,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 cp .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 python app.py
 ```
 
@@ -94,6 +101,7 @@ py -3 -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 python app.py
 ```
 
@@ -106,10 +114,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ### 首次登录和必要设置
 
 - 后台地址：`http://127.0.0.1:5000/admin`
-- 默认用户名：`admin`
-- 默认密码：`admin`
+- 用户名：`.env` 中的 `ADMIN_USERNAME`（默认名称为 `admin`）
+- 密码：必须在首次启动前写入 `.env` 的 `ADMIN_PASSWORD`，至少 12 个字符
 
-上线前请立即进入 **Admin → Settings → Administrator password** 修改管理员密码，并在 `.env` 中设置新的 `FLASK_SECRET_KEY`。Settings 页面还可以修改 SEO 标题与描述、链接跳转方式、跟踪参数、分类以及 Built with 选项。
+应用在密钥缺失、密码少于 12 个字符或仍为常见默认密码时会拒绝启动。Settings 页面还可以修改 SEO 标题与描述、链接跳转方式、跟踪参数、分类以及 Built with 选项。
 
 应用会自动读取项目根目录的 `.env`。至少建议检查以下配置：
 
@@ -122,6 +130,8 @@ DATABASE_PATH=./data/leaderboard.db
 FLASK_SECRET_KEY=replace-with-a-long-random-secret
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=replace-this-password
+TRUSTED_HOSTS=your-domain.example
+TRUST_PROXY_HEADERS=1
 SEED_DEMO_DATA=1
 ```
 
@@ -195,8 +205,9 @@ server {
     location / {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_pass http://127.0.0.1:8000;
     }
 }
@@ -245,6 +256,7 @@ python -m unittest discover -s tests -v
 git clone https://github.com/gmship/yex-leaderboard.git
 cd yex-leaderboard
 cp .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 docker compose up -d --build
 ```
 
@@ -254,10 +266,11 @@ Windows PowerShell equivalent:
 git clone https://github.com/gmship/yex-leaderboard.git
 Set-Location yex-leaderboard
 Copy-Item .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 docker compose up -d --build
 ```
 
-Open `http://127.0.0.1:5000`. Application data is persisted in `./data` on the host.
+Open `http://127.0.0.1:5000`. The port is bound to loopback only. Application data is persisted in the Docker volume `leaderboard-data`.
 
 Useful Docker commands:
 
@@ -268,7 +281,9 @@ docker compose down
 docker compose up -d --build
 ```
 
-`docker compose down` stops the container but keeps `./data`. Do not add `-v` unless you intentionally want to remove Docker-managed volumes.
+`docker compose down` stops the container but keeps the data volume. Do not add `-v` unless you intentionally want to remove it.
+
+When upgrading from an older release that used the `./data` bind mount, back up `data/leaderboard.db`. After the new release creates the `leaderboard-data` volume, stop the service, run `docker compose cp ./data/leaderboard.db leaderboard:/data/leaderboard.db`, then start it again.
 
 ## Install with Python on macOS or Linux
 
@@ -280,6 +295,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 cp .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 python app.py
 ```
 
@@ -295,6 +311,7 @@ py -3 -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
+# Edit .env and set FLASK_SECRET_KEY and ADMIN_PASSWORD before starting.
 python app.py
 ```
 
@@ -308,10 +325,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Open `http://127.0.0.1:5000/admin`.
 
-- Username: `admin`
-- Password: `admin`
+- Username: the `ADMIN_USERNAME` value, whose default name is `admin`
+- Password: the `ADMIN_PASSWORD` value you must set before the first start
 
-Change the password immediately in **Admin → Settings → Administrator password** before publishing the site. The changed password is stored as a one-way hash in SQLite.
+The app refuses to start with a missing, short, or common default password. A password changed in **Admin → Settings → Administrator password** is stored as a one-way hash in SQLite.
 
 The same Settings page controls:
 
@@ -331,10 +348,13 @@ The app loads `.env` automatically. Copy `.env.example` to `.env`, then edit it:
 | `HOST` | `127.0.0.1` | Development-server bind address. Use `0.0.0.0` only when you understand the network exposure. |
 | `PORT` | `5000` | Development-server port. |
 | `DATABASE_PATH` | `./data/leaderboard.db` | SQLite database location. Docker Compose overrides this with `/data/leaderboard.db`. |
-| `FLASK_SECRET_KEY` | placeholder | Persistent secret used to sign sessions and form tokens. Replace it in production. |
+| `FLASK_SECRET_KEY` | required | Persistent secret of at least 32 characters used to sign sessions and form tokens. |
 | `FLASK_SECRET_KEY_FILE` | empty | Optional path to a file containing the Flask secret instead of putting it in the environment. |
 | `ADMIN_USERNAME` | `admin` | Administrator username. |
-| `ADMIN_PASSWORD` | `admin` | Initial administrator password. A password changed in Settings takes precedence. |
+| `ADMIN_PASSWORD` | required | Initial administrator password, at least 12 non-default characters. A password changed in Settings takes precedence. |
+| `TRUSTED_HOSTS` | local hosts | Comma-separated public hosts accepted by Flask. Set the production domain explicitly. |
+| `TRUST_PROXY_HEADERS` | `0` | Set to `1` only behind one trusted reverse proxy that overwrites forwarded headers. |
+| `ALLOW_INSECURE_DEV_CONFIG` | `0` | Test-only escape hatch. Never enable it on a reachable deployment. |
 | `SUBMISSION_MIN_CENTS` | `100` | Minimum initial bid in cents. Values below 100 are raised to 100. |
 | `SEED_DEMO_DATA` | `1` | Adds ten fictional examples only when the projects table is empty. |
 | `STRIPE_SECRET_KEY` | empty | Enables Stripe Checkout when configured. |
@@ -403,7 +423,7 @@ sudo -u yexboard /srv/yex-leaderboard/.venv/bin/pip install -r /srv/yex-leaderbo
 sudo -u yexboard cp /srv/yex-leaderboard/.env.example /srv/yex-leaderboard/.env
 ```
 
-Edit `/srv/yex-leaderboard/.env` and set at least `SITE_NAME`, `BASE_URL`, `FLASK_SECRET_KEY`, `ADMIN_USERNAME`, and `ADMIN_PASSWORD`. Restrict it:
+Edit `/srv/yex-leaderboard/.env` and set at least `SITE_NAME`, `BASE_URL`, `FLASK_SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `TRUSTED_HOSTS`, and `TRUST_PROXY_HEADERS=1`. Restrict it:
 
 ```bash
 sudo chown yexboard:yexboard /srv/yex-leaderboard/.env
@@ -450,8 +470,9 @@ server {
     location / {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_pass http://127.0.0.1:8000;
     }
 }

@@ -11,6 +11,10 @@ os.environ["DATABASE_PATH"] = str(Path(TEST_DIR.name) / "test.db")
 os.environ["SEED_DEMO_DATA"] = "0"
 os.environ["STRIPE_SECRET_KEY"] = ""
 os.environ["FLASK_SECRET_KEY"] = "test-secret"
+os.environ["ADMIN_PASSWORD"] = "admin"
+os.environ["ALLOW_INSECURE_DEV_CONFIG"] = "1"
+os.environ["TRUST_PROXY_HEADERS"] = "0"
+os.environ["TRUSTED_HOSTS"] = "localhost,127.0.0.1"
 
 import app as application  # noqa: E402
 
@@ -20,6 +24,8 @@ class AppTests(unittest.TestCase):
         self.client = application.app.test_client()
         with application.db_session() as db:
             db.execute("DELETE FROM click_events")
+            db.execute("DELETE FROM preview_attempts")
+            db.execute("DELETE FROM admin_login_attempts")
             db.execute(
                 "DELETE FROM site_settings WHERE name IN ('admin_password_hash', 'categories_json', 'tools_json', 'outbound_mode', 'tracking_parameter', 'tracking_value', 'seo_title', 'seo_description')"
             )
@@ -148,6 +154,46 @@ class AppTests(unittest.TestCase):
         response = self.client.post("/api/site-preview", json={"url": "http://127.0.0.1"})
         self.assertEqual(response.status_code, 400)
 
+    def test_preview_connection_is_pinned_to_the_vetted_numeric_address(self):
+        connected_targets = []
+
+        class FakeSocket:
+            def getpeername(self):
+                return ("93.184.216.34", 443)
+
+        class FakeResponse:
+            status = 200
+            reason = "OK"
+            headers = application.http.client.HTTPMessage()
+
+            def read(self, _limit):
+                return b"<html><title>Safe</title></html>"
+
+        class FakeConnection:
+            def __init__(self, *_args, **_kwargs):
+                self.sock = None
+
+            def request(self, *_args, **_kwargs):
+                self.sock = self._create_connection(("attacker.example", 443), 6, None)
+
+            def getresponse(self):
+                return FakeResponse()
+
+            def close(self):
+                return None
+
+        def fake_create_connection(target, *_args, **_kwargs):
+            connected_targets.append(target)
+            return FakeSocket()
+
+        with patch.object(application.http.client, "HTTPSConnection", FakeConnection), patch.object(
+            application.socket, "create_connection", fake_create_connection
+        ):
+            application.open_pinned_preview_url(
+                "https://attacker.example/product", ("93.184.216.34",)
+            )
+        self.assertEqual(connected_targets, [("93.184.216.34", 443)])
+
     def test_site_preview_returns_editable_details(self):
         with patch.object(
             application,
@@ -160,6 +206,29 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["name"], "Fetched build")
         self.assertEqual(response.get_json()["description"], "Fetched description.")
+
+    def test_site_preview_is_limited_to_three_requests_per_ip_per_minute(self):
+        with patch.object(
+            application,
+            "fetch_site_metadata",
+            return_value={"name": "Fetched build", "description": "Fetched description."},
+        ):
+            responses = [
+                self.client.post(
+                    "/api/site-preview",
+                    json={"url": f"https://preview-{number}.example/product"},
+                )
+                for number in range(4)
+            ]
+        self.assertEqual([response.status_code for response in responses], [200, 200, 200, 429])
+        self.assertEqual(responses[-1].headers["Retry-After"], "60")
+
+    def test_untrusted_host_and_forwarded_host_are_not_accepted(self):
+        rejected = self.client.get("/", headers={"Host": "attacker.example"})
+        self.assertEqual(rejected.status_code, 400)
+        ignored = self.client.get("/", headers={"X-Forwarded-Host": "attacker.example"})
+        self.assertEqual(ignored.status_code, 200)
+        self.assertNotIn(b"attacker.example", ignored.data)
 
     def test_metadata_parser_prefers_open_graph(self):
         details = application.parse_site_metadata(
@@ -572,6 +641,37 @@ class AppTests(unittest.TestCase):
             ),
             "https://example.org/path?ref=abc&utm_source=yex#section",
         )
+
+    def test_admin_login_uses_exponential_backoff_and_audits_failures(self):
+        with self.assertLogs(application.app.logger, level="WARNING") as logs:
+            failures = [
+                self.client.post(
+                    "/admin/login",
+                    data={
+                        "admin_token": application.admin_login_token(),
+                        "username": "admin",
+                        "password": "wrong",
+                    },
+                )
+                for _ in range(5)
+            ]
+            blocked = self.client.post(
+                "/admin/login",
+                data={
+                    "admin_token": application.admin_login_token(),
+                    "username": "admin",
+                    "password": "admin",
+                },
+            )
+        self.assertTrue(all(response.status_code == 401 for response in failures))
+        self.assertEqual(blocked.status_code, 429)
+        self.assertIn("Retry-After", blocked.headers)
+        self.assertTrue(any("admin_login_blocked" in message for message in logs.output))
+        with application.db_session() as db:
+            audited_failures = db.execute(
+                "SELECT COUNT(*) FROM admin_login_attempts WHERE succeeded = 0"
+            ).fetchone()[0]
+        self.assertEqual(audited_failures, 5)
 
     def test_admin_requires_password_and_can_edit_and_hide_a_listing(self):
         now = application.utc_now()

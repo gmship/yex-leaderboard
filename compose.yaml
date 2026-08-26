@@ -6,6 +6,16 @@ services:
     environment:
       DATABASE_PATH: /data/leaderboard.db
     ports:
-      - "5000:8000"
+      - "127.0.0.1:5000:8000"
     volumes:
-      - ./data:/data
+      - leaderboard-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  leaderboard-data:

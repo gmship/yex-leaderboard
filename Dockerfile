@@ -5,11 +5,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN groupadd --gid 10001 yexboard \
+    && useradd --uid 10001 --gid yexboard --no-create-home --shell /usr/sbin/nologin yexboard
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-RUN mkdir -p /data
+COPY --chown=yexboard:yexboard . .
+RUN mkdir -p /data && chown yexboard:yexboard /data
+
+USER yexboard
 
 EXPOSE 8000
 

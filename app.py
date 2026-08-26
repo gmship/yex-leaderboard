@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
 import ipaddress
 import json
+import math
 import os
 import re
 import secrets
 import socket
 import sqlite3
+import ssl
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -16,7 +19,6 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from flask import Flask, Response, abort, g, has_request_context, jsonify, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
@@ -37,15 +39,42 @@ SITE_NAME = os.getenv("SITE_NAME", "Whatever Board").strip() or "Whatever Board"
 SECRET_KEY_FILE = os.getenv("FLASK_SECRET_KEY_FILE", "").strip()
 if os.getenv("FLASK_SECRET_KEY"):
     SECRET_KEY = os.environ["FLASK_SECRET_KEY"]
+    SECRET_KEY_IS_PERSISTENT = True
 elif SECRET_KEY_FILE and Path(SECRET_KEY_FILE).is_file():
     SECRET_KEY = Path(SECRET_KEY_FILE).read_text(encoding="utf-8").strip()
+    SECRET_KEY_IS_PERSISTENT = True
 else:
     SECRET_KEY = secrets.token_hex(32)
+    SECRET_KEY_IS_PERSISTENT = False
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
 MIN_SUBMISSION_CENTS = max(100, int(os.getenv("SUBMISSION_MIN_CENTS", "100")))
+ALLOW_INSECURE_DEV_CONFIG = os.getenv("ALLOW_INSECURE_DEV_CONFIG", "0") == "1"
+TRUST_PROXY_HEADERS = os.getenv("TRUST_PROXY_HEADERS", "0") == "1"
+configured_hosts = {
+    host.strip()
+    for host in os.getenv("TRUSTED_HOSTS", "").split(",")
+    if host.strip()
+}
+configured_hosts.update({"localhost", "127.0.0.1", urlsplit(BASE_URL).hostname or ""})
+TRUSTED_HOSTS = sorted(host for host in configured_hosts if host)
+
+if not ALLOW_INSECURE_DEV_CONFIG:
+    if not SECRET_KEY_IS_PERSISTENT or len(SECRET_KEY) < 32:
+        raise RuntimeError(
+            "Configure a persistent FLASK_SECRET_KEY or FLASK_SECRET_KEY_FILE "
+            "containing at least 32 characters."
+        )
+    if len(ADMIN_PASSWORD) < 12 or ADMIN_PASSWORD.casefold() in {
+        "admin",
+        "password",
+        "changeme",
+        "replace-this-password",
+        "replace-with-a-long-random-password",
+    }:
+        raise RuntimeError("Configure ADMIN_PASSWORD with at least 12 non-default characters.")
 
 TOOL_DEFINITIONS = (
     {"name": "ChatGPT", "slug": "chatgpt", "description": "Explore products whose builders used ChatGPT to move from idea to launch."},
@@ -95,6 +124,9 @@ MORE_TOOLS = tuple(
 CATEGORIES = ("Apps", "Agents", "Developer tools", "Creative", "Games", "Other")
 TIME_UNITS = {"minutes", "hours", "days", "weeks"}
 SITE_PREVIEW_MAX_BYTES = 512 * 1024
+SITE_PREVIEW_MAX_REDIRECTS = 3
+SITE_PREVIEW_REQUESTS_PER_MINUTE = 3
+PREVIEW_SSL_CONTEXT = ssl.create_default_context()
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -102,7 +134,9 @@ app.config["MAX_CONTENT_LENGTH"] = 32 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = BASE_URL.startswith("https://")
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.config["TRUSTED_HOSTS"] = TRUSTED_HOSTS
+if TRUST_PROXY_HEADERS:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 
 @app.context_processor
@@ -193,6 +227,20 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS preview_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS admin_login_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip_hash TEXT NOT NULL,
+                account_hash TEXT NOT NULL,
+                succeeded INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS click_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
@@ -222,6 +270,10 @@ def init_db() -> None:
                 ON projects(status, total_bid_cents DESC, created_at ASC);
             CREATE INDEX IF NOT EXISTS idx_attempts_ip
                 ON checkout_attempts(ip_hash, created_at);
+            CREATE INDEX IF NOT EXISTS idx_preview_attempts_ip
+                ON preview_attempts(ip_hash, created_at);
+            CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_pair
+                ON admin_login_attempts(ip_hash, account_hash, created_at);
             CREATE INDEX IF NOT EXISTS idx_click_events_ip
                 ON click_events(ip_hash, created_at);
             CREATE INDEX IF NOT EXISTS idx_active_visitors_last_seen
@@ -293,34 +345,91 @@ def canonical_url(raw_url: str) -> str:
     if address and (address.is_private or address.is_loopback or address.is_reserved):
         raise ValueError("Use a public product URL.")
     port = parsed.port
-    netloc = hostname if port is None else f"{hostname}:{port}"
+    display_hostname = f"[{hostname}]" if ":" in hostname else hostname
+    netloc = display_hostname if port is None else f"{display_hostname}:{port}"
     path = parsed.path.rstrip("/") or ""
     return urlunsplit((parsed.scheme.lower(), netloc, path, parsed.query, ""))
 
 
-def preview_target_url(raw_url: str) -> str:
-    """Return a public web URL that is safe enough for server-side preview fetching."""
+def resolve_preview_target(raw_url: str) -> tuple[str, tuple[str, ...]]:
+    """Resolve a preview URL once and return only vetted public target addresses."""
     url = canonical_url(raw_url)
     parsed = urlsplit(url)
     if parsed.port not in {None, 80, 443}:
         raise ValueError("Use a public website on the standard http or https port.")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
-        addresses = socket.getaddrinfo(parsed.hostname, parsed.port or 443, type=socket.SOCK_STREAM)
+        addresses = socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)
     except socket.gaierror as error:
         raise ValueError("That website could not be found.") from error
     if not addresses:
         raise ValueError("That website could not be found.")
+    vetted_addresses = []
     for address_info in addresses:
         address = ipaddress.ip_address(address_info[4][0])
         if not address.is_global:
             raise ValueError("Use a public product URL.")
-    return url
+        normalized = str(address)
+        if normalized not in vetted_addresses:
+            vetted_addresses.append(normalized)
+    return url, tuple(vetted_addresses)
 
 
-class SafePreviewRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        safe_url = preview_target_url(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, safe_url)
+def preview_target_url(raw_url: str) -> str:
+    return resolve_preview_target(raw_url)[0]
+
+
+def open_pinned_preview_url(
+    url: str, addresses: tuple[str, ...]
+) -> tuple[int, str, http.client.HTTPMessage, bytes]:
+    """Fetch one URL while connecting only to a previously vetted numeric address."""
+    parsed = urlsplit(url)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    target = parsed.path or "/"
+    if parsed.query:
+        target = f"{target}?{parsed.query}"
+    display_hostname = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+    default_port = 443 if parsed.scheme == "https" else 80
+    host_header = display_hostname if port == default_port else f"{display_hostname}:{port}"
+    headers = {
+        "Host": host_header,
+        "User-Agent": f"{SITE_NAME} link preview/1.0 (+https://yex.lol)",
+        "Accept": "text/html,application/xhtml+xml",
+        "Connection": "close",
+    }
+    last_error: OSError | None = None
+    for address in addresses:
+        if parsed.scheme == "https":
+            connection = http.client.HTTPSConnection(
+                parsed.hostname, port, timeout=6, context=PREVIEW_SSL_CONTEXT
+            )
+        else:
+            connection = http.client.HTTPConnection(parsed.hostname, port, timeout=6)
+
+        def create_connection(_target, timeout=6, source_address=None, *, _address=address):
+            return socket.create_connection((_address, port), timeout, source_address)
+
+        connection._create_connection = create_connection
+        try:
+            connection.request("GET", target, headers=headers)
+            if connection.sock is not None:
+                peer_address = ipaddress.ip_address(connection.sock.getpeername()[0])
+                if not peer_address.is_global:
+                    raise ValueError("Use a public product URL.")
+            response = connection.getresponse()
+            body = (
+                b""
+                if response.status in {301, 302, 303, 307, 308} or not 200 <= response.status < 300
+                else response.read(SITE_PREVIEW_MAX_BYTES + 1)
+            )
+            return response.status, response.reason, response.headers, body
+        except OSError as error:
+            last_error = error
+        finally:
+            connection.close()
+    if last_error:
+        raise last_error
+    raise OSError("The website could not be reached.")
 
 
 class SiteMetadataParser(HTMLParser):
@@ -395,28 +504,36 @@ def parse_site_metadata(html: str, source_url: str) -> dict[str, str]:
 
 
 def fetch_site_metadata(raw_url: str) -> dict[str, str]:
-    url = preview_target_url(raw_url)
-    request_object = Request(
-        url,
-        headers={
-            "User-Agent": f"{SITE_NAME} link preview/1.0 (+https://yex.lol)",
-            "Accept": "text/html,application/xhtml+xml",
-        },
-    )
-    opener = build_opener(SafePreviewRedirectHandler())
-    with opener.open(request_object, timeout=6) as response:
-        content_type = response.headers.get_content_type()
+    current_url = raw_url
+    for redirect_count in range(SITE_PREVIEW_MAX_REDIRECTS + 1):
+        current_url, addresses = resolve_preview_target(current_url)
+        status, reason, headers, body = open_pinned_preview_url(current_url, addresses)
+        if status in {301, 302, 303, 307, 308}:
+            location = headers.get("Location")
+            if not location or redirect_count >= SITE_PREVIEW_MAX_REDIRECTS:
+                raise ValueError("That website redirected too many times.")
+            current_url = urljoin(current_url, location)
+            continue
+        if not 200 <= status < 300:
+            raise HTTPError(current_url, status, reason, headers, None)
+        content_type = headers.get_content_type()
         if content_type not in {"text/html", "application/xhtml+xml"}:
             raise ValueError("That URL does not appear to be a web page.")
-        content_length = response.headers.get("Content-Length")
-        if content_length and int(content_length) > SITE_PREVIEW_MAX_BYTES:
-            raise ValueError("That page is too large to preview.")
-        body = response.read(SITE_PREVIEW_MAX_BYTES + 1)
+        content_length = headers.get("Content-Length")
+        if content_length:
+            try:
+                declared_size = int(content_length)
+            except ValueError as error:
+                raise ValueError("That website returned an invalid response size.") from error
+            if declared_size < 0:
+                raise ValueError("That website returned an invalid response size.")
+            if declared_size > SITE_PREVIEW_MAX_BYTES:
+                raise ValueError("That page is too large to preview.")
         if len(body) > SITE_PREVIEW_MAX_BYTES:
             raise ValueError("That page is too large to preview.")
-        encoding = response.headers.get_content_charset() or "utf-8"
-        final_url = preview_target_url(response.geturl())
-    return parse_site_metadata(body.decode(encoding, errors="replace"), final_url)
+        encoding = headers.get_content_charset() or "utf-8"
+        return parse_site_metadata(body.decode(encoding, errors="replace"), current_url)
+    raise ValueError("That website redirected too many times.")
 
 
 def make_slug(db: sqlite3.Connection, name: str) -> str:
@@ -524,6 +641,91 @@ def payments_enabled() -> bool:
 def client_ip_hash() -> str:
     ip = request.remote_addr or "unknown"
     return hashlib.sha256(f"{SECRET_KEY}:{ip}".encode()).hexdigest()
+
+
+class RateLimitError(ValueError):
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def enforce_preview_rate_limit(db: sqlite3.Connection) -> None:
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(minutes=1)).isoformat(timespec="seconds")
+    retention_cutoff = (now - timedelta(days=1)).isoformat(timespec="seconds")
+    ip_hash = client_ip_hash()
+    db.execute("DELETE FROM preview_attempts WHERE created_at < ?", (retention_cutoff,))
+    recent = db.execute(
+        "SELECT COUNT(*) FROM preview_attempts WHERE ip_hash = ? AND created_at >= ?",
+        (ip_hash, cutoff),
+    ).fetchone()[0]
+    if recent >= SITE_PREVIEW_REQUESTS_PER_MINUTE:
+        raise RateLimitError("Too many preview requests. Try again in a minute.", 60)
+    db.execute(
+        "INSERT INTO preview_attempts (ip_hash, created_at) VALUES (?, ?)",
+        (ip_hash, now.isoformat(timespec="seconds")),
+    )
+
+
+def admin_account_hash(account: str) -> str:
+    normalized = account.strip().casefold() or "admin"
+    return hmac.new(SECRET_KEY.encode(), normalized.encode(), hashlib.sha256).hexdigest()
+
+
+def admin_login_backoff(
+    db: sqlite3.Connection, account: str
+) -> tuple[int, int, str, str]:
+    now = datetime.now(timezone.utc)
+    ip_hash = client_ip_hash()
+    account_hash = admin_account_hash(account)
+    retention_cutoff = (now - timedelta(days=30)).isoformat(timespec="seconds")
+    window_cutoff = (now - timedelta(hours=1)).isoformat(timespec="seconds")
+    db.execute("DELETE FROM admin_login_attempts WHERE created_at < ?", (retention_cutoff,))
+    latest_success = db.execute(
+        """
+        SELECT MAX(created_at) FROM admin_login_attempts
+        WHERE ip_hash = ? AND account_hash = ? AND succeeded = 1
+        """,
+        (ip_hash, account_hash),
+    ).fetchone()[0]
+    failure_cutoff = max(window_cutoff, latest_success or window_cutoff)
+    rows = db.execute(
+        """
+        SELECT created_at FROM admin_login_attempts
+        WHERE ip_hash = ? AND account_hash = ? AND succeeded = 0
+          AND created_at > ?
+        ORDER BY created_at DESC
+        """,
+        (ip_hash, account_hash, failure_cutoff),
+    ).fetchall()
+    failure_count = len(rows)
+    if failure_count < 5:
+        return 0, failure_count, ip_hash, account_hash
+    delay_seconds = min(900, 2 ** min(failure_count - 5, 10))
+    latest_failure = datetime.fromisoformat(rows[0]["created_at"])
+    retry_after = max(0, math.ceil((latest_failure + timedelta(seconds=delay_seconds) - now).total_seconds()))
+    return retry_after, failure_count, ip_hash, account_hash
+
+
+def record_admin_login_attempt(
+    db: sqlite3.Connection,
+    *,
+    ip_hash: str,
+    account_hash: str,
+    succeeded: bool,
+) -> None:
+    db.execute(
+        """
+        INSERT INTO admin_login_attempts (ip_hash, account_hash, succeeded, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            ip_hash,
+            account_hash,
+            int(succeeded),
+            datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        ),
+    )
 
 
 @app.template_filter("tracked_url")
@@ -1263,21 +1465,68 @@ def admin_login():
             abort(403)
         supplied_username = str(request.form.get("username", ""))
         supplied_password = str(request.form.get("password", ""))
-        if hmac.compare_digest(supplied_username, ADMIN_USERNAME) and verify_admin_password(
-            supplied_password
-        ):
-            session["admin_authenticated"] = True
-            return redirect(url_for("admin_dashboard"))
-        response = app.make_response(
-            (
-                render_template(
-                    "admin_login.html",
-                    admin_token=admin_login_token(),
-                    error="Incorrect username or password.",
-                ),
-                401,
+        with db_session() as db:
+            retry_after, failure_count, ip_hash, account_hash = admin_login_backoff(
+                db, supplied_username
             )
-        )
+        if retry_after:
+            app.logger.warning(
+                "admin_login_blocked ip_hash=%s account_hash=%s failures=%d retry_after=%d",
+                ip_hash[:12],
+                account_hash[:12],
+                failure_count,
+                retry_after,
+            )
+            response = app.make_response(
+                (
+                    render_template(
+                        "admin_login.html",
+                        admin_token=admin_login_token(),
+                        error=f"Too many failed attempts. Try again in {retry_after} seconds.",
+                    ),
+                    429,
+                )
+            )
+            response.headers["Retry-After"] = str(retry_after)
+        else:
+            username_valid = hmac.compare_digest(supplied_username, ADMIN_USERNAME)
+            password_valid = verify_admin_password(supplied_password)
+            if username_valid and password_valid:
+                with db_session() as db:
+                    record_admin_login_attempt(
+                        db,
+                        ip_hash=ip_hash,
+                        account_hash=account_hash,
+                        succeeded=True,
+                    )
+                session.clear()
+                session["admin_authenticated"] = True
+                return redirect(url_for("admin_dashboard"))
+            with db_session() as db:
+                record_admin_login_attempt(
+                    db,
+                    ip_hash=ip_hash,
+                    account_hash=account_hash,
+                    succeeded=False,
+                )
+            new_failure_count = failure_count + 1
+            log_method = app.logger.warning if new_failure_count >= 5 else app.logger.info
+            log_method(
+                "admin_login_failed ip_hash=%s account_hash=%s failures=%d",
+                ip_hash[:12],
+                account_hash[:12],
+                new_failure_count,
+            )
+            response = app.make_response(
+                (
+                    render_template(
+                        "admin_login.html",
+                        admin_token=admin_login_token(),
+                        error="Incorrect username or password.",
+                    ),
+                    401,
+                )
+            )
     elif admin_authenticated():
         return redirect(url_for("admin_dashboard"))
     else:
@@ -1390,9 +1639,9 @@ def admin_change_password():
     confirm_password = str(request.form.get("confirm_password", ""))
     if not verify_admin_password(current_password):
         return render_admin_settings(error="Current password is incorrect.", status_code=400)
-    if len(new_password) < 4:
+    if len(new_password) < 12:
         return render_admin_settings(
-            error="New password must be at least 4 characters.", status_code=400
+            error="New password must be at least 12 characters.", status_code=400
         )
     if new_password != confirm_password:
         return render_admin_settings(error="New passwords do not match.", status_code=400)
@@ -1656,9 +1905,21 @@ def site_preview():
     payload = request.get_json(silent=True) or {}
     try:
         product_url = canonical_url(str(payload.get("url", "")))
-        details = fetch_site_metadata(product_url)
     except ValueError as error:
         return jsonify(error=str(error)), 400
+    with db_session() as db:
+        try:
+            enforce_preview_rate_limit(db)
+        except RateLimitError as error:
+            return (
+                jsonify(error=str(error)),
+                429,
+                {"Retry-After": str(error.retry_after)},
+            )
+    try:
+        details = fetch_site_metadata(product_url)
+    except ValueError as error:
+        return jsonify(error=str(error)), 422
     except (HTTPError, URLError, TimeoutError, OSError):
         return jsonify(error="We couldn't read that site. You can still enter the details manually."), 422
     with db_session() as db:
